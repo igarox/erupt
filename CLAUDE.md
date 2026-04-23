@@ -6,8 +6,8 @@ This is the Erupt workspace — an Obsidian plugin by Slipstream that extracts s
 
 ## Repo structure
 
-This is `erupt/` within the `igarox/slipstream-workspace` monorepo (workspace branch: `master`).
-Erupt will become its own git submodule (`igarox/erupt`, branch `main`).
+This is `erupt/` — git submodule of `igarox/slipstream-workspace` (workspace branch: `master`).
+Repo: `igarox/erupt`, branch `main`. Registered as submodule 2026-04-22.
 
 **When to commit:**
 - Code changes → commit in `erupt/` (on `main`)
