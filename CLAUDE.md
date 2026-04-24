@@ -90,8 +90,10 @@ Settings stored in Obsidian's plugin data (not env vars):
 | `authToken` | string | JWT (Free and Cloud plans — proxy auth) |
 | `ollamaBaseUrl` | string | Ollama URL (Local plan, default `http://localhost:11434`) |
 | `ollamaModel` | string | Active Ollama model name (Local plan) |
-| `suppressedCompatibilityNotice` | `string[]` | Model names for which the 3-pass fallback notice is suppressed |
-| `suppressedLengthCheck` | `string[]` | Article paths for which the post-edit length compliance modal is suppressed |
+| `suppressedCompatibilityNotice` | `string[]` | Model names for which the 3-pass fallback notice is suppressed — **persisted but not exposed in settings UI** |
+| `suppressedLengthCheck` | `string[]` | Article paths for which the post-edit length compliance modal is suppressed — **persisted but not exposed in settings UI** |
+| `wikigameUnlocked` | `boolean` | Set to `true` once WikiGame unlock conditions are met; registers the `erupt-play-wikigame` command |
+| `firstRunComplete` | `boolean` | Set to `true` after the first-run modal is dismissed post-auth; prevents re-showing |
 
 ## gstack
 

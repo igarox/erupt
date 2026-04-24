@@ -366,3 +366,131 @@ in production and contradiction detection quality has been measured.
 **Effort:** M (CC: ~2-3 hours — Obsidian graph API has limited plugin surface; may require CSS + graph renderer hooks investigation).
 
 **Depends on:** v1 Magma Explorer pane shipped. Obsidian graph view plugin API investigation.
+
+---
+
+## [P1 — ERUPT] Community Plugins Description + Settings Field Tooltips + Empty States
+
+**What:** Minimum documentation surfaces required before Obsidian Community Plugins submission:
+1. **Community Plugins description** — the copy shown in the plugin browser. One short paragraph explaining what Erupt does (extract AI conversations into your vault wiki) and what it requires (Obsidian desktop, an account or Ollama).
+2. **Settings field tooltips** — `setDesc()` on every `Setting` renderer field so users know what each setting does without reading docs.
+3. **Empty states** — the Magma Explorer pane when `.magma/wiki/` is empty (first run): show a brief `"No Magma articles yet — run Extract Notes on a note with a pasted AI conversation."` placeholder. Session picker when no sessions exist: `"No sessions yet — extract from a note to create one."`.
+
+**Why:** Without these, users arriving from the Community Plugins browser have no context. Empty states are the first thing a new user sees.
+
+**Effort:** XS-S (CC: ~30 min).
+
+**Depends on:** Plugin scaffold + settings panel implementation.
+
+---
+
+## [P1 — ERUPT] Settings Schema Migration Pattern
+
+**What:** Implement additive schema migration at plugin load using `Object.assign(DEFAULT_SETTINGS, await this.loadData())`. This ensures new settings fields are added with defaults when upgrading from an older plugin version, without wiping existing user data.
+
+**Why:** Without this pattern, adding a new field to `EruptSettings` will silently leave it `undefined` for existing users on upgrade, causing runtime errors or missed features.
+
+**How to apply:** In `Plugin.onload()`:
+```typescript
+const DEFAULT_SETTINGS: EruptSettings = { /* all fields with defaults */ };
+this.settings = Object.assign(DEFAULT_SETTINGS, await this.loadData());
+```
+
+**Effort:** XS (CC: ~5 min).
+
+**Depends on:** Plugin scaffold.
+
+---
+
+## [P1 — ERUPT] Auth UX — Connect Button + Status Indicator in Settings Panel
+
+**What:** Add the pre-auth state to the Free and Cloud settings panel sections. Currently the settings spec only documents the post-auth state. Required:
+- "Connect Slipstream account" button (`mod-cta`) in the "Account" section when `authToken` is absent or expired
+- After auth: green status dot + "Connected — [email]" label + "Disconnect" button (`mod-warning`)
+- Clicking "Connect Slipstream account" opens the browser auth flow at `auth.slipstream.app`
+
+**Why:** Without the Connect button, there is no in-plugin entry point to authentication. Users are stuck.
+
+**Effort:** XS (CC: ~20 min to wire the button to the deep-link auth flow).
+
+**Depends on:** [BLOCKER] Slipstream Account Auth System.
+
+---
+
+## [P1 — ERUPT] Ollama Model Dropdown — Fetched from Running Instance
+
+**What:** Populate the Ollama model dropdown in settings (Local plan) by fetching `GET /api/tags` from the configured Ollama base URL. Show model names with "Recommended" badges on `llama3.2`, `mistral`, `phi3`. Graceful degradation: if Ollama is not running at settings open time, fall back to a freeform text input with a help note: `"Ollama not detected — enter model name manually."`.
+
+**Why:** A static dropdown requires a plugin release every time a new model is released. Fetching live from Ollama keeps the list current without plugin updates.
+
+**How to apply:** On settings panel open (or on "API Access" section render), fire `GET /api/tags`. On success, render dropdown. On failure (network error), render freeform input. Cache the fetched list in memory for the plugin session.
+
+**Effort:** XS-S (CC: ~20 min).
+
+**Depends on:** Plugin scaffold + settings panel implementation.
+
+---
+
+## [P1 — ERUPT] First-run Modal — One-time Post-Auth Orientation
+
+**What:** After the first successful JWT deep-link callback (`obsidian://erupt/auth?token=<jwt>`), show a one-time modal:
+
+```
+Title: "You're connected."
+Body:  "Open a note with a pasted AI conversation and run Extract Notes to get started."
+CTA:   [Got it]
+```
+
+**Why:** Without this, users who just authenticated have no signal about what to do next. They land back in Obsidian with no orientation.
+
+**Persistence:** Set `firstRunComplete: true` in plugin settings on dismiss. Check before showing — never show twice.
+
+**Effort:** XS (CC: ~10 min).
+
+**Depends on:** Auth system + plugin scaffold.
+
+---
+
+## [P1 — ERUPT] Inline Error Summary in Completion Modal
+
+**What:** In the completion modal warning banner, replace the static `"See .magma/extraction_log.jsonl"` pointer with:
+1. Inline error summary: up to 3 most recent errors as `"Turn N: [human-readable reason]"` in monospace
+2. `[Show full log]` button (secondary style) — opens `.magma/extraction_log.jsonl` in an Obsidian leaf via `app.workspace.openLinkText`
+
+**Why:** Making users navigate to a JSONL file to see what went wrong is a DX failure. Top 3 errors inline answers the basic question; full log is one click away for power users.
+
+**Effort:** XS-S (CC: ~20 min — extraction_log.jsonl is already written; just read last 3 error entries at modal render time).
+
+**Depends on:** Completion modal implementation + extraction_log.jsonl schema finalized.
+
+---
+
+## [P1 — ERUPT] Post-Extraction Feedback — Thumbs Up/Down in Completion Modal
+
+**What:** For the first 5 lifetime extractions, show a `"How did this extraction go?"` row in the completion modal with 👍/👎 buttons. On tap: send `{ rating: 'up'|'down', extractionId }` to Slipstream backend (fire-and-forget), replace the row with `"Thanks!"` for 1.5s, then fade out. Hide permanently after the 5th rating or 5th extraction (whichever comes first).
+
+**Why:** Early signal on extraction quality is critical for tuning the system prompt. This is the cheapest possible feedback loop — one tap, in context, no friction.
+
+**Tracking:** Increment `feedbackRatingsGiven` counter in plugin settings. When ≥ 5, stop showing the row. Backend endpoint: `POST /api/extraction-feedback` with JWT auth.
+
+**Effort:** XS-S (CC: ~20 min for the UI row + backend endpoint stub).
+
+**Depends on:** Completion modal implementation + Slipstream backend proxy.
+
+---
+
+## [P1 — ERUPT] JWT Post-Completion Check
+
+**What:** After the completion flow finishes (completion modal shown), validate the stored JWT's `valid_until` field. If expired, show:
+
+```
+new Notice("Your session expired — reconnect your Slipstream account for future extractions.", 6000)
+```
+
+**Why:** JWT expiry mid-run is possible for long extractions. Rather than aborting mid-run (which loses partial work), check once at the end and alert the user. This gives them a clear signal to re-authenticate before their next run.
+
+**Constraint:** Do NOT validate JWT mid-run. 401s during extraction are treated as standard API errors. This check fires ONLY after the modal is shown — once per run, never during.
+
+**Effort:** XS (CC: ~5 min — check `settings.authToken` expiry date at completion time).
+
+**Depends on:** Auth system + plugin scaffold.
