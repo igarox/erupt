@@ -49,8 +49,9 @@ Erupt is an Obsidian plugin (TypeScript, Obsidian Plugin API).
 **Build toolchain:** esbuild (standard Obsidian plugin toolchain)
 
 **Plan tiers:**
-- **Free (BYOK):** User provides their own Anthropic API key. Plugin calls Anthropic API directly.
-- **Cloud:** Slipstream proxies API calls via `api.slipstream.app/proxy/claude`. User authenticates with a Slipstream account (JWT). No API key required.
+- **Free:** 3 lifetime extraction jobs. Routes through Slipstream proxy (`api.slipstream.app/proxy/claude`). Requires Slipstream account (JWT). No API key required.
+- **Local ($5/mo):** Ollama at `http://localhost:11434`. No proxy, no account. Agentic pipeline for tool-use models; 3-pass fallback for non-tool-use models (Phi3 etc.).
+- **Cloud ($15-20/mo):** Unlimited. Routes through Slipstream proxy. Requires Slipstream account (JWT). Haiku 4.5 default + Sonnet boost toggle.
 
 **Core user flow:**
 1. User opens a conversation (ChatGPT, Claude, Gemini) and runs "Erupt: Extract Notes"
@@ -85,9 +86,11 @@ Settings stored in Obsidian's plugin data (not env vars):
 
 | Setting | Type | Purpose |
 |---|---|---|
-| `plan` | `'free' \| 'cloud'` | Active plan tier |
-| `apiKey` | string | Anthropic API key (Free plan only) |
-| `authToken` | string | JWT (Cloud plan only) |
+| `plan` | `'free' \| 'local' \| 'cloud'` | Active plan tier |
+| `authToken` | string | JWT (Free and Cloud plans — proxy auth) |
+| `ollamaBaseUrl` | string | Ollama URL (Local plan, default `http://localhost:11434`) |
+| `ollamaModel` | string | Active Ollama model name (Local plan) |
+| `suppressedCompatibilityNotice` | `string[]` | Model names for which the 3-pass fallback notice is suppressed |
 
 ## gstack
 

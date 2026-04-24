@@ -262,38 +262,145 @@ Two distinct states based on plan tier. Use Obsidian's `Setting` renderer for al
 
 ### Status Bar
 
-Minimal text, monospace feel. States:
+Minimal text with shimmer on the "Erupt" word during active extraction. The progress bar uses block characters styled with Erupt's accent palette.
 
-| State | Copy | Style |
-|-------|------|-------|
-| Idle | `Erupt` | `--text-muted`, standard weight |
-| Processing | `Erupt: turn X/Y…` | `--text-normal`, X and Y in `var(--font-monospace)` |
-| Complete | `Erupt: done ✓` | `--text-success` for 2s, then fades back to idle |
-| Error | `Erupt: error` | `--text-error`, stays until dismissed or next run |
+**Format during extraction:** `[Erupt]  ████▒░░░░░  turn X/Y  ~Zs  ✕`
 
-`aria-live="polite"` on the status bar element. The status bar item is a live region — screen readers announce state changes without focus.
+- `Erupt` word: `shimmer-product` CSS class during active extraction (ember orange loop animation); `--text-muted` at idle
+- Progress bar: 10 chars total — `█` filled in `--erupt-accent`, `▒` partial, `░` empty in `--text-faint`
+- Turn/time counters: `var(--font-monospace)`
+- `✕`: clickable cancel affordance — first click shows `new Notice("Click again to cancel extraction")`, second click within 3s fires `AbortController.abort()`
+
+**Full state table:**
+
+| State | Copy | "Erupt" style | Progress bar | ✕ |
+|-------|------|---------------|--------------|---|
+| Idle | `Erupt` | `--text-muted`, no shimmer | — | — |
+| Extracting | `Erupt  ████▒░░  turn X/Y  ~Zs` | `shimmer-product` | filled=`--erupt-accent`, empty=`--text-faint` | visible |
+| Detecting model | `Erupt: detecting model...` | `--text-muted` | — | — |
+| Final pass | `Erupt  ████████▒░  final pass` | `shimmer-product` | fills to ~90% | visible |
+| Cancelled | `Erupt: cancelled` | `--text-muted` | — | — |
+| Done | `Erupt: done ✓` | `--erupt-success` for 2s → idle | — | — |
+| Done w/ warnings | `Erupt: done with warnings ✓` | `--erupt-warning` for 2s → idle | — | — |
+| Error (persistent) | `Erupt: error` | `--text-error`, stays until next run | — | — |
+
+`aria-live="polite"` on the status bar element. De-bounce screen reader announcements: update `aria-live` content every 5 turns and on state changes only — not every turn increment.
+
+### Compatibility Mode Notice
+
+Fires before extraction starts when the active Ollama model does not support tool calls. One-time per model (suppressed via `suppressedCompatibilityNotice: string[]` in plugin settings).
+
+```
+Modal type: standard Obsidian Modal (--modal-radius, --modal-border)
+Title: "⚠️ Compatibility mode" — plain, var(--h3-size), no shimmer
+       role="dialog", aria-modal="true", aria-labelledby pointing to title
+Body:  "[model name] doesn't support interactive extraction.
+        Using 3-pass mode instead. Quality is reduced compared to
+        tool-capable models. For best results, switch to Llama 3.2
+        or Mistral 7B in settings."
+       --text-normal, --font-ui-medium
+       ⚠️ icon tint: --erupt-warning (#D97706) — icon only, NOT as background
+Checkbox: "Don't show again for [model name]"
+          Standard Obsidian checkbox/toggle
+          Stores model name in suppressedCompatibilityNotice[]
+CTA: Single "OK" button — mod-cta
+     No "Switch model" CTA — user may intentionally want 3-pass
+Keyboard: Escape = dismiss (does NOT set "don't show again")
+          Focus lands on OK button on open
+```
+
+When 3-pass fallback auto-detects mid-run (unknown model, probe turn returns no tool calls):
+- Discard probe response, `new Notice("Switching to compatibility mode for [model]", 3000)`
+- Restart extraction in 3-pass mode; status bar shows "Erupt: detecting model..." during probe
 
 ### Completion Modal
 
 The primary emotional moment — the one surface where design expression is highest.
 
-- Modal title: "by Slipstream" — `shimmer-brand`, small, uppercase, letter-spaced. Not the product name. The product name is in the content.
-- Heading: "Erupt" — `shimmer-product`, `var(--h2-size)`
-- Sub-heading: note count, folder path in `--text-muted`
-- Body: summary of what was extracted (N notes, M stubs, K TODOs)
-- If clarifying questions exist: a scrollable list, each with an inline input
-- Primary CTA: "Done" — `mod-cta`
-- Secondary: "Open folder" — standard button
+**Step 1 — Result Modal (always shown):**
+
+Hierarchy (top to bottom):
+1. `"Erupt"` — `shimmer-product` at `var(--font-ui-small)`, weight 600 (eyebrow/product mark)
+2. `"by Slipstream"` — `shimmer-brand`, small, uppercase, letter-spaced
+3. Outcome headline — `shimmer-product`, `var(--h2-size)`:
+   - Clean: `"Extraction complete"`
+   - Warnings: `"⚠️  Completed with warnings"` (shimmer uses `--erupt-warning` base instead of `--erupt-accent`)
+   - Zero articles: `"Extraction complete"` (same headline — see empty state below)
+4. Sub-heading: `"Erupt — N notes, M stubs, K TODOs"` — `--text-muted`, `var(--font-ui-small)`
+5. Folder path: `.magma/wiki/` — `--text-muted`, monospace
+6. Warning banner (only if `errorCount > 0` or draft-failed articles exist):
+   - `--erupt-warning` left border (3px) + `--erupt-warning` at 10% opacity background
+   - `"N turns failed — X articles incomplete:"`
+   - Draft-failed article paths listed: `var(--font-monospace)` 0.85em, `var(--background-modifier-form-field)` background
+   - `"See .magma/extraction_log.jsonl"` — same monospace inline treatment
+7. CTAs:
+   - No questions, no draft-failed: `[Done]` (mod-cta) + `[Open folder]`
+   - Questions exist: `[Review N questions →]` (mod-cta) + `[Open folder]`
+   - Draft-failed exist: `[Review incomplete articles →]` (mod-cta) + `[Open folder]` + `[Done — skip]` (plain link)
+   - Both: `[Review N questions →]` leads to Step 2; Step 2 has a path to Step 3
+
+**Empty state (zero articles written):**
+- Headline: `"Extraction complete"` (same)
+- Sub-heading: `"Nothing extracted yet"` — `--text-muted`
+- Body: `"No Magma articles were written. The transcript may not have contained extractable knowledge, or this was a short session."` — `--text-muted`, `--font-ui-small`
+- CTA: `[Done]` only — no "Open folder" (nothing to open)
+
+---
+
+**Step 2 — Questions Modal (only if clarifying questions exist):**
+
+Dedicated surface for questions requiring user input. Each question from `add_clarifying_question` appears here with full-width text answer input.
+
+```
+Title: "Needs clarification" — plain, var(--h3-size)
+       role="dialog", aria-modal="true"
+Each question row:
+  - Bold question text — --text-normal, --font-ui-medium
+  - Context line (affectedArticles) — --text-muted, --font-ui-small, below question
+  - Full-width <textarea> — placeholder "Your answer...", aria-label = question text, aria-required
+  - Separator between questions: var(--divider-color)
+CTAs: [Submit answers] (mod-cta) + [Skip] (plain link)
+Keyboard:
+  Tab: cycles textarea → Submit → Skip → first textarea
+  ↑/↓: moves focus between textareas
+  Enter on textarea: inserts newline (does NOT submit)
+  Enter on Submit button: submits
+  Escape: "N questions unanswered — close anyway?" confirmation Notice
+```
+
+Answers are stored in `ClarifyingQuestion.answer: string` (append field to interface). In v1, answers are written to `.magma/extraction_log.jsonl` as `{ event: "clarification", question, answer, timestamp }`. No API call — user notes only.
+
+---
+
+**Step 3 — Draft Review Modal (only if draft-failed articles exist):**
+
+One article at a time. Shows the partial content written before the turn failure, lets user decide whether to keep or discard.
+
+```
+Title: "Incomplete article" — plain, var(--h3-size)
+Progress: "Article X of Y" — --text-muted, --font-ui-small
+Article path: monospace, --text-muted
+Content preview: read-only <pre> block, var(--font-monospace) 0.85em,
+                 var(--background-modifier-form-field) background,
+                 max-height 200px, overflow-y scroll
+Error context: "Turn N failed: [error from extraction_log]" — --text-warning, --font-ui-small
+CTAs: [Keep as stub] (mod-cta) + [Discard]
+      Keep: removes draft-failed flag, sets confidence=stub, writes back via file system
+      Discard: deletes .magma/wiki/{path}.md
+Keyboard: K = keep, D = discard, → = next article (when decision is already made)
+          Escape = close modal (remaining undecided articles stay as draft-failed)
+```
 
 ### Session Picker Modal (unlinked note trigger)
 
 Minimal. No shimmer — this is a utility modal, not a magic moment.
 
-- Title: "Which session?" — plain, `var(--h3-size)`
+- Title: `"Select session to link"` — plain, `var(--h3-size)` (not "Which session?" — utility language)
 - List of sessions: keyboard-navigable (`↑` / `↓` / `Enter` / `Escape`)
 - Each row: session title + date in `--text-muted` + turn count in monospace
 - Focus ring: `--interactive-accent` outline
 - `role="listbox"` on the container, `role="option"` on each row, `aria-selected` on focused item
+- `Enter` on focused session triggers "Link & Update" directly
 
 ### Upgrade Modal
 
@@ -319,13 +426,16 @@ Two triggers: (1) user clicks the upgrade link in settings, (2) Free tier user a
 
 ## Accessibility
 
-- `aria-live="polite"` on status bar element
+- `aria-live="polite"` on status bar element; de-bounced to every 5 turns + state changes only
 - All modals: `role="dialog"`, `aria-modal="true"`, `aria-labelledby` pointing to heading
 - Session picker: `role="listbox"` / `role="option"` / `aria-selected`
 - Focus trap in all modals — `Tab` cycles within, `Escape` closes
 - Keyboard navigation for all interactive elements — no mouse-only interactions
-- Contrast: all text against Obsidian's theme backgrounds must meet WCAG AA (4.5:1 body, 3:1 large text)
+- Contrast: all text against Obsidian's theme backgrounds must meet WCAG AA (4.5:1 body, 3:1 large text). **TODO: verify `--erupt-warning: #D97706` contrast on dark backgrounds at implementation time.**
 - `shimmer-brand` and `shimmer-product`: both include `prefers-reduced-motion` fallbacks (static gradient, no animation)
+- Compatibility mode notice: focus lands on OK button on open; Escape dismisses without setting "don't show again"
+- Questions modal: `aria-required` on each textarea; `aria-label` = question text; Escape shows confirmation before closing
+- Draft review modal: keyboard shortcuts K/D/→ documented in modal footer in `--text-faint`
 
 ---
 
@@ -340,3 +450,11 @@ Two triggers: (1) user clicks the upgrade link in settings, (2) Free tier user a
 | 2026-04-23 | Geological family color map established | Magma `#8B1A1A`, Lava `#C8390A`, Erupt `#E85D26` — temperature gradient from underground-dark to surface-bright |
 | 2026-04-23 | Upgrade modal: no shimmer, no auto-show | Shimmer on upgrade CTA reads as pushy. Only show on deliberate action. |
 | 2026-04-23 | WikiMode rebranded Magma | Fits geological family; Magma is underground foundation, feeds Lava above it |
+| 2026-04-24 | In-extraction surface: status bar only (option A) | Non-blocking, Obsidian-native. Cancel via inline ✕ with double-click protection. "Erupt" word gets shimmer-product during active extraction. ASCII block progress bar. |
+| 2026-04-24 | Shimmer on settings byline: retained | Intentional brand energy ("dash of pizzazz"). Outside voices recommended removing it; founder override — deliberate. |
+| 2026-04-24 | Completion modal headline: stateful outcome | "Extraction complete" / "⚠️ Completed with warnings" as h2 instead of "Erupt". "Erupt" moves to eyebrow above "by Slipstream". Resolves Codex hard rejection #3 (strong headline with no clear action). |
+| 2026-04-24 | Completion modal: two-step flow | Step 1 = result summary. Step 2 = clarifying questions (dedicated modal, keyboard-navigable). Step 3 = draft-failed article review. Large extractions may have many questions requiring full text answers. |
+| 2026-04-24 | Session picker title: "Select session to link" | Replaces "Which session?" — utility language, action-oriented. |
+| 2026-04-24 | Compatibility mode notice: standard Obsidian Modal | Not a toast/Notice — has a checkbox. No "Switch model" CTA (user may want 3-pass). Warning color applied to icon only, not background. |
+| 2026-04-24 | Draft-failed resolution: Step 3 modal | After warnings, user can review incomplete articles one at a time: Keep as stub or Discard. K/D/→ keyboard shortcuts. |
+| 2026-04-24 | Lock conflict: Obsidian Notice() | No custom modal for "extraction already running". new Notice() at 4000ms is sufficient. |

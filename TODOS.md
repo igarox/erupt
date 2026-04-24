@@ -239,6 +239,27 @@ in production and contradiction detection quality has been measured.
 
 ---
 
+## [P1 — ERUPT] Draft-Failed Article Review Modal
+
+**What:** After extraction completes with turn failures, surface a Step 3 "Draft Review Modal" that lets the user decide what to do with each incomplete article. Without this, draft-failed articles (articles that had partial content written before a turn error) are invisible — users would need to manually inspect `.magma/wiki/` frontmatter to discover them.
+
+**UI spec (in DESIGN.md):**
+- One article at a time: title, path, partial content preview (read-only, max-height 200px, scrollable), error context from `extraction_log.jsonl`
+- Two CTAs: `[Keep as stub]` (removes `draft-failed` flag, sets confidence=stub, saves) and `[Discard]` (deletes article)
+- Keyboard: `K` = keep, `D` = discard, `→` = next (when decision made). `Escape` = close (undecided articles remain draft-failed)
+- Progress indicator: "Article X of Y"
+- Footer: keyboard shortcut reference in `--text-faint`
+
+**Entry point:** Step 3 in the completion flow, after the result modal (Step 1) and questions modal (Step 2 if applicable). Accessible via `[Review incomplete articles →]` CTA in the result modal when draft-failed articles exist.
+
+**Data required:** `write_magma` handler must record the "last known good" content snapshot for each article before the failed turn. Store in plugin session state as `Map<path, lastGoodContent: string>`. If no prior content (first write to that path failed), "Keep as stub" creates a minimal stub with just frontmatter.
+
+**Effort:** S (CC: ~30 min for modal + handler changes to track last-good snapshots).
+
+**Depends on:** Plugin scaffold + `write_magma` block-indexed implementation. The `lastGoodContent` tracking can be added to the handler at initial implementation time.
+
+---
+
 ## [P1 — ERUPT] Block Parser Test Suite
 
 **What:** Before using block-indexed `write_magma` in any real extraction, write a dedicated test suite for the Markdown block parser.
