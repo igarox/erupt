@@ -1,3 +1,4 @@
+import type Anthropic from '@anthropic-ai/sdk';
 import type { Vault } from 'obsidian';
 import type { ExtractionRunState, ExtractionConfig, ClarifyingQuestion } from '../types';
 import type { VaultScanner } from '../vault-scanner';
@@ -14,6 +15,102 @@ export const TOOL_NAMES = {
   SEARCH_MAGMA: 'search_magma',
   LIST_RUN_ARTICLES: 'list_run_articles',
 } as const;
+
+// Tool schemas passed to the Anthropic API — collocated with handlers so names can't drift
+export const MAIN_TOOLS: Anthropic.Tool[] = [
+  {
+    name: TOOL_NAMES.READ_TURNS,
+    description: 'Read a range of transcript turns for context. Start at 0 and work forward.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        start: { type: 'integer', description: '0-based inclusive start turn index' },
+        end:   { type: 'integer', description: 'Inclusive end index. Must be < current turn.' },
+      },
+      required: ['start', 'end'],
+    },
+  },
+  {
+    name: TOOL_NAMES.READ_MAGMA,
+    description: 'Read an existing Magma article by path. Always read before rewriting.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        path: { type: 'string', description: 'Path without .md extension. E.g. "auth/jwt-tokens"' },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: TOOL_NAMES.SEARCH_MAGMA,
+    description: 'Search existing Magma articles by topic. Use before creating to avoid duplicates.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'Topic keywords' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: TOOL_NAMES.SEARCH_VAULT,
+    description: 'Search vault notes by topic for additional context.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string', description: 'Search query' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: TOOL_NAMES.READ_VAULT,
+    description: 'Read a specific vault note by full path.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        path: { type: 'string', description: 'Full vault path including .md extension' },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: TOOL_NAMES.WRITE_MAGMA,
+    description: 'Write or overwrite a Magma article. Replaces the entire file. Read first if it exists.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        path:       { type: 'string', description: 'Article path without .md. Lowercase, hyphens, slashes.' },
+        content:    { type: 'string', description: 'Full Markdown content including frontmatter.' },
+        citations:  { type: 'array', items: { type: 'integer' }, description: 'Turn numbers cited in this article.' },
+        confidence: { type: 'string', enum: ['stub', 'provisional'], description: 'Confidence level.' },
+      },
+      required: ['path', 'content', 'citations', 'confidence'],
+    },
+  },
+  {
+    name: TOOL_NAMES.ADD_CLARIFYING_QUESTION,
+    description: 'Queue a question for the user when information is ambiguous and requires human input.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        question:         { type: 'string', description: 'Specific, answerable question.' },
+        context:          { type: 'string', description: 'Why this came up and why it matters.' },
+        affectedArticles: { type: 'array', items: { type: 'string' }, description: 'Article paths affected.' },
+      },
+      required: ['question', 'context'],
+    },
+  },
+  {
+    name: TOOL_NAMES.LIST_RUN_ARTICLES,
+    description: 'List all Magma articles written in this session. Use sparingly — prefer the context seed.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+];
 
 const PATH_RE = /^[a-z0-9_\/\-]+$/;
 
