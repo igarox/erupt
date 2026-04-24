@@ -236,15 +236,22 @@ Status bar state changes: 150ms cross-fade on text. No bounce, no slide — just
 
 Two distinct states based on plan tier. Use Obsidian's `Setting` renderer for all fields — do not build custom input components.
 
-**Free (BYOK) state:**
-- Section header: "API Key" — `Setting` with name + description
-- Input: API key field, `type="password"`, placeholder "sk-ant-..."
-- Below input: small help text in `--text-muted` — "Your key is stored locally and never sent to Slipstream."
-- Upgrade nudge: one line, `--text-muted`, a single unobtrusive link — "Upgrade to Cloud for automatic key management."
-
-**Cloud (paid) state:**
-- Section header: "Account" — shows authenticated email
+**Free (3 lifetime jobs) state:**
+- Section header: "Your Plan" — plan badge `Free`, extraction counter `[●●●○]`, upgrade CTA link
+- Section header: "Account" — authenticated Slipstream email (Free uses the proxy — JWT required)
 - Button: "Sign out" — `mod-warning` class
+- No API key field (Free uses Slipstream proxy, not direct API)
+- Model is Haiku 4.5, fixed — no override control shown
+
+**Local ($5/mo) state:**
+- Section header: "Your Plan" — "Local Plan — $5/month" + [Manage subscription]
+- Section header: "API Access" — Ollama base URL input (default `http://localhost:11434`) + model dropdown
+- Model dropdown populated by `GET /api/tags` from Ollama; shows "Recommended" badges on llama3.2, mistral, phi3
+- Warning banner if Ollama unreachable: "Ollama not detected — make sure Ollama is running before extracting."
+
+**Cloud ($15–20/mo) state:**
+- Section header: "Your Plan" — "✓ Cloud Plan — Unlimited" + user email + [Sign out]
+- Section header: "Model" — Haiku 4.5 default + Sonnet boost toggle (`mod-toggle`)
 - No API key field visible
 
 **Shared settings (both states):**
@@ -290,7 +297,7 @@ Minimal. No shimmer — this is a utility modal, not a magic moment.
 
 ### Upgrade Modal
 
-Triggered only on deliberate action (clicking upgrade link in settings) — never auto-shown mid-flow.
+Two triggers: (1) user clicks the upgrade link in settings, (2) Free tier user attempts a 4th extraction (job limit reached — modal fires mid-flow, blocking the extraction).
 
 - No shimmer on this modal (avoid feeling pushy)
 - Title: "Cloud Plan" — plain

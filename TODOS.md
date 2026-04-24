@@ -8,63 +8,52 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 
 ---
 
-## [BLOCKER — ERUPT] Build Slipstream API Proxy Backend for Cloud Plan
+## [BLOCKER — ERUPT] Build Slipstream API Proxy Backend
 
-**What:** Before any Cloud plan user can extract without an API key, a Slipstream proxy service must exist at `api.slipstream.app/proxy/claude`. The plugin detects plan tier from stored JWT and routes accordingly: Cloud → proxy, Free/Local → direct Anthropic API.
+**What:** `api.slipstream.app/proxy/claude` — required for both Free tier (server-side job counter enforcement) and Cloud plan (proxy extraction). Plugin routes by plan tier: Free / Cloud → proxy (JWT bearer auth), Local → Ollama at `http://localhost:11434`.
 
-**Why:** Design review (2026-04-22) resolved the API model: Cloud plan = Slipstream proxies (no user API key). This is the correct long-term UX. Without the proxy, Cloud plan must be BYOK too, which undermines the value proposition of paying $15/mo.
+**Why:** The per-account job counter for Free tier enforcement runs server-side. Cloud plan cannot function without the proxy. Local plan ships without it and uses Ollama.
 
 **How to apply:** Build a Slipstream backend service (Node.js/Fastify or similar) that:
 1. Accepts `POST /proxy/claude` with JWT bearer token + request body (same shape as Anthropic's `/v1/messages`)
 2. Validates JWT against Slipstream account system
-3. Forwards to Anthropic with Slipstream's own API key
-4. Streams/returns response
+3. Enforces Free tier job counter (max 3 lifetime) server-side
+4. Forwards to Anthropic with Slipstream's own API key
+5. Streams/returns response
 
-**Pros:** Cloud plan has the right UX (no API key friction). Slipstream controls model selection for cloud users.
+**Billing:** Stripe (not LemonSqueezy). See Stripe migration TODO below.
 
-**Cons:** Backend infrastructure required before v1 ships. Adds weeks of work. Slipstream's Anthropic API costs are now variable with usage — must track per-account usage for billing.
+**Context:** Local plan ships without this proxy. Strategy option: ship Local plan in v1 without proxy, add Free + Cloud in v1.5 when proxy is ready.
 
-**Context:** Free and Local plan tiers can ship without this proxy. Only Cloud plan requires it. Strategy option: ship Free + Local in v1 without proxy, add Cloud plan in v1.5 when proxy is ready.
-
-**Depends on:** Slipstream account system (see next TODO).
+**Depends on:** Slipstream account auth system (see next TODO), Stripe setup.
 
 **Effort:** L (human: 2-3 weeks / CC: ~4-6 hours for proxy logic, plus infrastructure setup).
 
 ---
 
-## [BLOCKER — ERUPT] Slipstream Account Auth System for Cloud Plan
+## [BLOCKER — ERUPT] Slipstream Account Auth System
 
-**What:** Cloud plan users authenticate with a Slipstream account. The plugin opens a browser auth flow (`auth.slipstream.app`), user signs in, JWT returned and stored via `Plugin.saveData()`.
+**What:** Free and Cloud plan users authenticate with a Slipstream account. The plugin opens a browser auth flow (`auth.slipstream.app`), user signs in, JWT returned and stored via `Plugin.saveData()`.
 
-**Why:** The proxy backend needs to validate that a user has a paid Cloud plan before forwarding their requests. This requires a Slipstream account with plan tier attached.
+**Why:** Both Free and Cloud tiers route through the proxy. The proxy validates JWT to enforce the Free tier job counter and Cloud plan entitlement. Local plan users do NOT need an account.
 
-**How to apply:** Implement OAuth or email/password auth at `auth.slipstream.app`. After successful auth, redirect to an Obsidian deep-link (`obsidian://erupt/auth?token=<jwt>`) or poll a short-lived code. Plugin receives JWT, validates expiry, stores securely.
+**JWT payload:** `{ plan: 'free'|'local'|'cloud', valid_until: ISO8601, user_id }`
 
-**Pros:** Clean UX for cloud users. Enables per-account usage tracking for billing fairness.
+**How to apply:** Implement OAuth or email/password auth at `auth.slipstream.app`. After successful auth, redirect to Obsidian deep-link (`obsidian://erupt/auth?token=<jwt>`). Plugin receives JWT, validates expiry on load + before each API call, stores securely via `Plugin.saveData()`.
 
 **Cons:** Significant infrastructure work (auth service, JWT issuance, account DB). Can reuse Bleeper's auth system if one exists.
 
-**Context:** If Bleeper already has Slipstream account infrastructure (LemonSqueezy account creation flow), this may be partially built.
-
-**Depends on:** LemonSqueezy integration (for plan tier detection from payment).
+**Depends on:** Stripe setup (plan tier attached to account via Stripe webhook on subscription event).
 
 **Effort:** L (human: 1-2 weeks / CC: ~2-3 hours for token exchange + plugin integration, plus backend auth service).
 
 ---
 
-## [PRE-LAUNCH — ERUPT] Create Erupt DESIGN.md
+## [DONE — ERUPT] Create Erupt DESIGN.md
 
-> **Partial:** DESIGN.md stub created 2026-04-22. Run `/design-consultation` to complete.
-
-**What:** Create `erupt/DESIGN.md` documenting Erupt's design system — distinct from Bleeper's. Use the UI Design Specifications section of the CEO plan as the source, expand into a standalone design reference.
-
-**Why:** Bleeper's DESIGN.md doesn't apply to an Obsidian plugin. Erupt has different constraints (plugin API, Obsidian theming, dark/light themes, no custom fonts). Without a dedicated design doc, implementation will diverge from the design decisions made in the design review.
-
-**What to include:** Erupt brand tokens (ember orange, 4 CSS variables), settings panel IA and two states (BYOK / Cloud), status bar state machine copy, completion notice copy, upgrade modal layout, session picker UX, a11y requirements, mobile exclusion.
-
-**Effort:** XS (CC: ~15 min — translate from CEO plan UI Design Specifications section).
-
-**Depends on:** Nothing.
+> **Completed 2026-04-23.** `/design-consultation` ran and generated a complete `erupt/DESIGN.md`.
+> Updated 2026-04-23 (post office-hours): BYOK → proxy Free state, Local plan state added,
+> Upgrade Modal trigger corrected (auto-shows on 4th Free job attempt, not settings-only).
 
 ---
 
@@ -90,6 +79,22 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 
 ---
 
+## [PRE-LAUNCH — ERUPT] CI/CD Build Pipeline and Plugin Distribution
+
+**What:** Set up the build pipeline and release automation before Obsidian Community Plugins submission.
+
+**Requirements:**
+1. **esbuild config** — entry point `main.ts`, outputs `main.js` + `styles.css` to repo root, `manifest.json` stays in root, minified for release
+2. **GitHub Actions workflow** — triggered on version tag push (`v*`), runs esbuild, creates a GitHub Release with `main.js`, `manifest.json`, `styles.css` as release assets
+3. **Obsidian plugin registry** — requires a PR to `obsidian-md/obsidian-releases` adding the plugin to `community-plugins.json`. Needs: plugin ID, name, author, description, repo URL
+4. **Version bump script** — update `manifest.json` + `package.json` versions in sync on each release
+
+**Effort:** XS (CC: ~20 min to scaffold esbuild config + GitHub Actions YAML).
+
+**Depends on:** Nothing blocking — can be set up before implementation is complete.
+
+---
+
 ## [P2 — ERUPT] Confirm `mobile: false` in manifest.json
 
 **What:** Erupt's `manifest.json` must have `"isDesktopOnly": true` to prevent installation on Obsidian mobile. Obsidian will show the standard "desktop only" notice automatically.
@@ -97,3 +102,149 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 **How to apply:** Add `"isDesktopOnly": true` to `manifest.json`. One line.
 
 **Effort:** XS (CC: ~1 min).
+
+---
+
+## [BLOCKER — ERUPT + BLEEPER] Migrate Billing to Stripe
+
+**What:** Switch from LemonSqueezy to Stripe everywhere. Bleeper first (existing subscriptions), then Erupt at launch. Goal: become own merchant account with direct card processing. Maintain a backup processor (Paddle or Braintree) as tested failover before v2.
+
+**Why:** Platform risk — LemonSqueezy can restrict accounts. Stripe gives more control and better MCC codes for software subscriptions.
+
+**Checkout copy discipline (non-negotiable):** Never mention "scraping," "downloading from platforms," specific AI platform names (ChatGPT, Claude, Gemini), or anything that reads as ToS-circumvention on checkout pages. Use "personal knowledge management" and "AI session notes" throughout. This applies to all Stripe product descriptions, checkout metadata, and email copy.
+
+**How to apply:**
+1. Create Stripe account, configure Erupt product + price objects
+2. Migrate Bleeper subscriptions to Stripe (migration tooling)
+3. Wire Stripe webhook → account system (set `plan` in JWT on subscription event)
+4. Test failover: configure Paddle or Braintree as backup, verify it can activate in <24h
+5. Document the failover runbook
+
+**Depends on:** Slipstream account auth system (JWT plan field set by Stripe webhook).
+
+**Effort:** M (human: 1 week / CC: ~2-3 hours for integration + migration).
+
+---
+
+## [PRE-LAUNCH — ERUPT] Trademark Clearance for "Erupt"
+
+**What:** Confirm "Erupt" is clear for use as a commercial product name before Obsidian Community Plugins submission.
+
+**Known conflicts:** Rust crate `erupt` (Vulkan bindings), Chinese admin framework (Erupt Engine), npm packages. None are in the same market, but clearance needed.
+
+**How to apply:** Run a trademark search (USPTO TESS + EU IPO + UK IPO). Check domain availability. Check Obsidian plugin registry for name conflicts. If blocked, fallback is "Erupt by Slipstream" as the display name.
+
+**Effort:** XS-S (human: 2-4 hours of search + legal review if flagged).
+
+---
+
+## [PRE-LAUNCH — ERUPT] Verify isomorphic-git Obsidian Sandbox Compatibility
+
+**What:** Confirm that `isomorphic-git`'s filesystem operations work within Obsidian's plugin security model before committing to it as the git history backend.
+
+**Why:** Obsidian plugins run in a sandboxed renderer process. Some Node.js fs APIs may be restricted. isomorphic-git is pure JS (no native binary) which is promising, but needs verification.
+
+**How to apply:** Build a minimal test plugin that initializes an isomorphic-git repo in `.magma/.git-history/`, makes a commit, and reads back the log. Run on all three platforms (Windows, macOS, Linux). If it fails, evaluate fallback: custom JSONL-based diff log (no git, just append-only diffs).
+
+**Effort:** XS (CC: ~30 min to build test plugin + run).
+
+---
+
+## [P1 — ERUPT] Pull Wikipedia Editorial Rules for MagmaWiki Prompt Construction
+
+**What:** Before writing the extraction system prompt and final pass compliance prompt,
+research and distill the subset of Wikipedia's editorial guidelines that apply to MagmaWiki
+article structure and style. The goal is to ground the agent's article-writing behavior in
+actual Wikipedia rules rather than informal approximations.
+
+**Relevant Wikipedia guidelines to audit:**
+- **WP:SPLIT / WP:SUMMARY** — when and how to split a long article into sub-articles;
+  summary style (parent article keeps a brief summary, full content in child article)
+- **WP:STUB** — what makes a stub legitimate; stub articles whose sum has no information
+  loss vs. content removal
+- **WP:LIST** — when list-primary articles are appropriate vs. prose articles
+- **WP:LEAD** — lead section structure; every article should be understandable from the lead alone
+- **WP:NPOV / WP:ASSERT** — avoid asserting facts without attribution; cite or contextualize
+- **WP:OVERCITE / WP:UNDERCITE** — balance; don't over-cite obvious things, don't under-cite contested claims
+- **WP:STRUCTURE** — section hierarchy, when to use H2 vs H3, prose-first before lists
+- **WP:REDIRECT** — when to redirect a concept to a broader article rather than stub it separately
+- **WP:MERGE** — criteria for merging two articles vs. keeping them separate (applies to Magma dedup)
+- **WP:SIZE** — article length guidance; readable prose size target (~30-50KB / ~4,000-8,000 words
+  for a full article, shorter for focused sub-articles)
+
+**How to apply:** Distill the relevant rules into a concise "MagmaWiki Style Guide" section
+in the extraction system prompt. The agent should consult these rules when deciding:
+(a) whether to split an oversized article vs. trim, (b) when to create a stub vs. a
+provisional article, (c) how to structure an article's sections, (d) when to merge vs.
+keep two articles separate.
+
+**Key insight:** The extraction agent doesn't need all of Wikipedia's rules — only the
+structural and style rules that affect article-writing decisions during extraction and
+final pass compliance. Skip editorial policies about verifiability from external sources
+(Magma's source is always the transcript).
+
+**Effort:** S (human: 2-3 hours of research + distillation / CC: ~30 min to read guidelines
+and write the MagmaWiki Style Guide section).
+
+**Depends on:** Agentic extraction pipeline design doc (approved 2026-04-23).
+
+---
+
+## [P1 — ERUPT] Create `src/models.ts` — Ollama Tool-Use Capability List
+
+**What:** A compile-time static list mapping Ollama model names to their tool-use capability.
+Used by the extraction pipeline to route Local plan users to the agentic pipeline (tool use)
+or 3-pass blob fallback.
+
+**Initial list:**
+- Tool-use capable: `llama3.1`, `llama3.2`, `llama3.3`, `mistral` (7B+), `mixtral`
+- Non-tool-use: `phi3`, `phi3:mini`, `phi3:medium`, `mistral:3b`, `mistral:7b-text`
+- Unknown models: default to agentic pipeline; fallback to 3-pass if first turn returns
+  `stop_reason: "end_turn"` with zero `tool_use` blocks
+
+**How to apply:** Export a `getModelCapabilities(modelName: string): ModelCapabilities`
+function from `src/models.ts`. Call at plugin load time after `GET /api/tags` returns the
+active Ollama model name. Store result in plugin session state so re-detection is skipped
+for subsequent extractions in the same session.
+
+**Updates:** Require a plugin release to update the list (no remote config in v1). File
+should be well-commented to make community PRs easy.
+
+**Effort:** XS (CC: ~15 min).
+
+**Depends on:** Agentic extraction pipeline design doc (approved 2026-04-23).
+
+---
+
+## [P2 — ERUPT v1.5] Final Pass Tool Enrichment: `compare_articles`
+
+**What:** Add a `compare_articles(pathA, pathB)` tool to the final pass contradiction
+detection sub-pass. The tool returns a structured diff of two Magma articles, making it
+easier for the model to identify semantic contradictions without reading both articles
+in full in-context.
+
+**Why:** The current sub-pass 2 injects all article content into the model's prompt. For
+sessions with many articles, a comparison tool reduces the amount of content the model
+needs to reason about simultaneously and may improve contradiction detection accuracy.
+
+**How to apply:** Implement in the TypeScript tool handler. The tool reads both articles
+from `.magma/wiki/` and returns a structured summary: shared claims, claims unique to A,
+claims unique to B, confidence differences. The model uses this to target its
+`write_magma` corrections.
+
+**Effort:** S (CC: ~30 min for tool implementation + prompt update).
+
+**Depends on:** v1 final pass shipped and validated. Do not implement until v1 has run
+in production and contradiction detection quality has been measured.
+
+---
+
+## [PRE-LAUNCH — ERUPT] Verify Magma Folder Exclusion API
+
+**What:** Confirm that `app.vault.setConfig('userIgnoreFilters', [..., '.magma'])` works in Obsidian 1.5+ to hide `.magma/` from the file explorer and Quick Switcher.
+
+**Why:** If `setConfig` is sandboxed or unavailable, the CSS fallback must be pre-built and tested before launch. Users should never see `.magma/` polluting their file explorer.
+
+**How to apply:** Test `setConfig` in a dev plugin against Obsidian 1.5+. If unavailable, implement the CSS fallback: `[data-path=".magma"] { display: none !important; }` via `this.addStyle()`. Verify both that the folder is hidden and that Magma view can still access it via `app.vault.getAbstractFileByPath('.magma')`.
+
+**Effort:** XS (CC: ~20 min).
