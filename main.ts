@@ -1,6 +1,17 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { App, Notice, Plugin, PluginSettingTab, Setting, TFile, Vault } from 'obsidian';
+import Anthropic from '@anthropic-ai/sdk';
 import { DEFAULT_EXTRACTION_CONFIG, createRunState, type ExtractionRunState } from './src/types';
 import { VaultScanner } from './src/vault-scanner';
+import { runExtractionLoop } from './src/extraction/loop';
+import { run3PassFallback } from './src/extraction/fallback';
+import { runFinalPass } from './src/extraction/final-pass';
+import { ensureDir } from './src/fs';
+import { parseTranscript } from './src/transcript-parser';
+import {
+  getCachedCapability,
+  getKnownCapability,
+  type ModelCapability,
+} from './src/models';
 
 // ---- Settings ---------------------------------------------------------------
 
@@ -14,6 +25,7 @@ interface EruptSettings {
   wikigameUnlocked: boolean;
   firstRunComplete: boolean;
   feedbackRatingsGiven: number;
+  byokApiKey: string;                        // dev testing only — not rendered in settings UI
 }
 
 const DEFAULT_SETTINGS: EruptSettings = {
@@ -26,6 +38,7 @@ const DEFAULT_SETTINGS: EruptSettings = {
   wikigameUnlocked: false,
   firstRunComplete: false,
   feedbackRatingsGiven: 0,
+  byokApiKey: '',
 };
 
 const MAGMA_WIKI_ROOT = '.magma/wiki';
@@ -116,10 +129,7 @@ export default class EruptPlugin extends Plugin {
 
   private async extractNotes() {
     if (this.extractionActive) {
-      new Notice(
-        'Extraction already running — wait for it to complete or restart Obsidian if it\'s stuck.',
-        5000
-      );
+      new Notice("Extraction already running — restart Obsidian if it's stuck.", 5000);
       return;
     }
 
@@ -129,26 +139,121 @@ export default class EruptPlugin extends Plugin {
       return;
     }
 
-    // Local plan: pre-flight Ollama check
     if (this.settings.plan === 'local') {
       const reachable = await this.pingOllama();
       if (!reachable) {
-        new Notice('Ollama not detected — make sure Ollama is running before extracting.', 5000);
+        new Notice('Ollama not detected — make sure Ollama is running.', 5000);
         return;
       }
     }
 
-    // TODO: link session if note has no linked session
-    // TODO: run model capability detection (Local plan)
-    // TODO: show compatibility mode notice for 3-pass models
-    // TODO: acquire lock file, build vault scanner index
-    // TODO: run runExtractionLoop() or run3PassFallback()
-    // TODO: run runFinalPass()
-    // TODO: show completion modal
-    // TODO: check WikiGame unlock conditions
-    // TODO: JWT post-completion check (Free/Cloud plans)
+    const locked = await acquireLock(this.app.vault, MAGMA_WIKI_ROOT);
+    if (!locked) {
+      new Notice('Erupt: another extraction is in progress (lock file exists).', 5000);
+      return;
+    }
 
-    new Notice('Erupt: extraction pipeline not yet implemented', 3000);
+    this.extractionActive = true;
+    this.setStatus('Erupt: starting...');
+
+    try {
+      const content = await this.app.vault.read(activeFile);
+      const transcript = parseTranscript(content);
+      if (transcript.length === 0) {
+        new Notice('Erupt: no conversation turns found in this note.', 4000);
+        return;
+      }
+
+      await this.vaultScanner.build(this.app.vault);
+      this.runState = createRunState();
+
+      const client = buildClient(this.settings);
+      const model = getModel(this.settings);
+      const capability = getCapability(this.settings);
+
+      if (capability === '3pass' &&
+          !this.settings.suppressedCompatibilityNotice.includes(model)) {
+        new Notice(
+          `Running in 3-pass mode for "${model}". Quality may be lower than with a tool-use capable model.`,
+          6000
+        );
+      }
+
+      this.setStatus(`Erupt: turn 0/${transcript.length}...`);
+
+      const loopOpts = {
+        client,
+        model,
+        transcript,
+        vault: this.app.vault,
+        state: this.runState,
+        config: DEFAULT_EXTRACTION_CONFIG,
+        vaultScanner: this.vaultScanner,
+        magmaRoot: MAGMA_WIKI_ROOT,
+        onProgress: (turn: number, total: number) => {
+          this.setStatus(`Erupt: turn ${turn}/${total}...`);
+        },
+        onWriteMagma: (_path: string) => {
+          // Phase 7: flash Magma Explorer row
+        },
+      };
+
+      if (capability === 'agentic') {
+        await runExtractionLoop(loopOpts);
+      } else {
+        await run3PassFallback({
+          client,
+          transcript,
+          vault: this.app.vault,
+          state: this.runState,
+          config: DEFAULT_EXTRACTION_CONFIG,
+          magmaRoot: MAGMA_WIKI_ROOT,
+          onProgress: (label) => this.setStatus(`Erupt: ${label}...`),
+        });
+      }
+
+      this.setStatus('Erupt: final pass...');
+      await runFinalPass({
+        client,
+        vault: this.app.vault,
+        state: this.runState,
+        config: DEFAULT_EXTRACTION_CONFIG,
+        magmaRoot: MAGMA_WIKI_ROOT,
+        onProgress: (label) => this.setStatus(`Erupt: ${label}...`),
+      });
+
+      const articleCount = this.runState.runArticles.size;
+      const warnings = this.runState.errorCount > 0 ? ` (${this.runState.errorCount} warnings)` : '';
+      this.setStatus(`Erupt: done ✓${warnings}`);
+      setTimeout(() => this.setStatus('Erupt'), 2000);
+
+      // Phase 7: show CompletionModal
+      new Notice(
+        `Extraction complete — ${articleCount} article${articleCount !== 1 ? 's' : ''}${warnings} in .magma/wiki/`,
+        6000
+      );
+
+      if (this.runState.clarifyingQuestions.length > 0) {
+        // Phase 7: show QuestionsModal
+        new Notice(`${this.runState.clarifyingQuestions.length} clarifying question(s) queued.`, 4000);
+      }
+
+      await this.checkWikiGameUnlock();
+
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        this.setStatus('Erupt: cancelled');
+        setTimeout(() => this.setStatus('Erupt'), 2000);
+      } else {
+        this.setStatus('Erupt: error');
+        setTimeout(() => this.setStatus('Erupt'), 3000);
+        new Notice(`Erupt: extraction failed — ${err instanceof Error ? err.message : String(err)}`, 5000);
+      }
+    } finally {
+      this.extractionActive = false;
+      this.runState = null;
+      await releaseLock(this.app.vault, MAGMA_WIKI_ROOT);
+    }
   }
 
   private async openMagmaExplorer() {
@@ -344,6 +449,41 @@ class EruptSettingTab extends PluginSettingTab {
 }
 
 // ---- Utilities --------------------------------------------------------------
+
+function buildClient(settings: EruptSettings): Anthropic {
+  if (settings.byokApiKey) {
+    return new Anthropic({ apiKey: settings.byokApiKey });
+  }
+  return new Anthropic({
+    baseURL: 'https://api.slipstream.app/proxy/claude',
+    apiKey: settings.authToken,
+  });
+}
+
+function getModel(settings: EruptSettings): string {
+  if (settings.plan === 'local') return settings.ollamaModel || 'llama3.2';
+  return 'claude-haiku-4-5-20251001';
+}
+
+function getCapability(settings: EruptSettings): ModelCapability {
+  if (settings.plan !== 'local') return 'agentic';
+  const known = getCachedCapability(settings.ollamaModel) ?? getKnownCapability(settings.ollamaModel);
+  return known ?? '3pass';
+}
+
+async function acquireLock(vault: Vault, magmaRoot: string): Promise<boolean> {
+  const lockPath = magmaRoot.replace(/\/wiki$/, '') + '/.lock';
+  if (vault.getFileByPath(lockPath)) return false;
+  await ensureDir(vault, lockPath);
+  await vault.create(lockPath, JSON.stringify({ ts: Date.now() }));
+  return true;
+}
+
+async function releaseLock(vault: Vault, magmaRoot: string): Promise<void> {
+  const lockPath = magmaRoot.replace(/\/wiki$/, '') + '/.lock';
+  const f = vault.getFileByPath(lockPath);
+  if (f) await vault.delete(f);
+}
 
 function parseJwtEmail(token: string): string | undefined {
   try {
