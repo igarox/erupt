@@ -5,6 +5,7 @@ import { VaultScanner } from './src/vault-scanner';
 import { runExtractionLoop } from './src/extraction/loop';
 import { run3PassFallback } from './src/extraction/fallback';
 import { runFinalPass } from './src/extraction/final-pass';
+import { CompatNoticeModal } from './src/ui/compat-notice-modal';
 import { ensureDir } from './src/fs';
 import { parseTranscript } from './src/transcript-parser';
 import {
@@ -173,10 +174,14 @@ export default class EruptPlugin extends Plugin {
 
       if (capability === '3pass' &&
           !this.settings.suppressedCompatibilityNotice.includes(model)) {
-        new Notice(
-          `Running in 3-pass mode for "${model}". Quality may be lower than with a tool-use capable model.`,
-          6000
-        );
+        await new CompatNoticeModal(
+          this.app,
+          model,
+          (m) => {
+            this.settings.suppressedCompatibilityNotice.push(m);
+            this.saveSettings();
+          },
+        ).openAsync();
       }
 
       this.setStatus(`Erupt: turn 0/${transcript.length}...`);
@@ -202,7 +207,8 @@ export default class EruptPlugin extends Plugin {
         await runExtractionLoop(loopOpts);
       } else {
         await run3PassFallback({
-          client,
+          ollamaBaseUrl: this.settings.ollamaBaseUrl,
+          ollamaModel: this.settings.ollamaModel || 'llama3.2',
           transcript,
           vault: this.app.vault,
           state: this.runState,
