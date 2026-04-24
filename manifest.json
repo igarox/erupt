@@ -1,0 +1,10 @@
+{
+  "id": "erupt",
+  "name": "Erupt",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Extract structured notes from AI conversations into your vault.",
+  "author": "Slipstream",
+  "authorUrl": "https://slipstream.app",
+  "isDesktopOnly": true
+}

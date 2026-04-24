@@ -1,0 +1,24 @@
+{
+  "name": "erupt",
+  "version": "0.1.0.0",
+  "description": "Erupt — extract AI conversations into Obsidian vault notes",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production"
+  },
+  "keywords": [],
+  "author": "Slipstream",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "0.21.5",
+    "obsidian": "latest",
+    "tslib": "2.6.0",
+    "typescript": "5.3.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
+  }
+}

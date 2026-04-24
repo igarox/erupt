@@ -67,17 +67,29 @@ Erupt is an Obsidian plugin (TypeScript, Obsidian Plugin API).
 
 ## Commands
 
-[PLACEHOLDER — fill in once scaffolding begins]
-
 ```bash
 # Install dependencies
 npm install
 
-# Development build (watch)
+# Development build (watch mode — outputs main.js)
 npm run dev
 
-# Production build
+# Production build (type-check + bundle)
 npm run build
+```
+
+## Source layout
+
+```
+main.ts                     Plugin entry point — EruptPlugin class, settings, commands
+src/types.ts                Shared interfaces: EruptSettings, ExtractionConfig, ExtractionRunState, ClarifyingQuestion
+src/models.ts               Model capability detection (agentic vs 3pass) + cache
+src/vault-scanner.ts        TF-IDF vault index used by search_vault tool
+src/fs.ts                   ensureDir helper for vault file creation
+src/extraction/tools.ts     Tool handlers (read_turns, write_magma, search_vault, ...)
+src/extraction/loop.ts      Main agentic extraction loop (per-turn, AbortController, retry)
+src/extraction/final-pass.ts  Sub-pass 1 (compliance) + sub-pass 2 (contradiction detection)
+src/extraction/fallback.ts  3-pass blob fallback for non-tool-use Ollama models
 ```
 
 ## Environment Variables / Settings
