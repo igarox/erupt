@@ -348,3 +348,21 @@ in production and contradiction detection quality has been measured.
 **How to apply:** Test `setConfig` in a dev plugin against Obsidian 1.5+. If unavailable, implement the CSS fallback: `[data-path=".magma"] { display: none !important; }` via `this.addStyle()`. Verify both that the folder is hidden and that Magma view can still access it via `app.vault.getAbstractFileByPath('.magma')`.
 
 **Effort:** XS (CC: ~20 min).
+
+---
+
+## [P2 — ERUPT v1.5] Graph View: Magma Integration
+
+**What:** Smart graph view behavior based on context. When opening graph view while on a vault page, open the standard vault graph. When opening while on a Magma page or within the Magma Explorer pane, open a Magma-only graph with Magma branding. A toggle in either graph's settings panel includes the other's nodes for a combined view.
+
+**Why:** Magma builds a semantic graph of your knowledge. Surfacing that graph makes the interconnection visible and gives users a bird's-eye view of what Erupt has extracted.
+
+**UX spec (from /design-review 2026-04-24):**
+- Default behavior: context-sensitive graph type on open (vault page → vault graph; Magma page or pane → Magma-only graph)
+- Toggle in graph settings: "Show vault notes" (in Magma graph) / "Show Magma articles" (in vault graph)
+- Combined view shows both node sets simultaneously
+- Future: settings for color and connection strength of Magma-to-vault edges
+
+**Effort:** M (CC: ~2-3 hours — Obsidian graph API has limited plugin surface; may require CSS + graph renderer hooks investigation).
+
+**Depends on:** v1 Magma Explorer pane shipped. Obsidian graph view plugin API investigation.

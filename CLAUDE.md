@@ -91,6 +91,7 @@ Settings stored in Obsidian's plugin data (not env vars):
 | `ollamaBaseUrl` | string | Ollama URL (Local plan, default `http://localhost:11434`) |
 | `ollamaModel` | string | Active Ollama model name (Local plan) |
 | `suppressedCompatibilityNotice` | `string[]` | Model names for which the 3-pass fallback notice is suppressed |
+| `suppressedLengthCheck` | `string[]` | Article paths for which the post-edit length compliance modal is suppressed |
 
 ## gstack
 
