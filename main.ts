@@ -215,9 +215,11 @@ export default class EruptPlugin extends Plugin {
       this.setStatus('Erupt: final pass...');
       await runFinalPass({
         client,
+        model,
         vault: this.app.vault,
         state: this.runState,
         config: DEFAULT_EXTRACTION_CONFIG,
+        vaultScanner: this.vaultScanner,
         magmaRoot: MAGMA_WIKI_ROOT,
         onProgress: (label) => this.setStatus(`Erupt: ${label}...`),
       });
