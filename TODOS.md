@@ -239,6 +239,85 @@ in production and contradiction detection quality has been measured.
 
 ---
 
+## [P1 — ERUPT] Block Parser Test Suite
+
+**What:** Before using block-indexed `write_magma` in any real extraction, write a dedicated test suite for the Markdown block parser.
+
+**Why:** The block parser is the foundation of the new `write_magma` primitive. Getting it wrong produces silent corruption — the agent writes to block index N but overwrites the wrong content. Edge cases in Markdown block parsing are easy to miss.
+
+**Test cases required:**
+- YAML frontmatter boundary (`---` delimiters treated as frontmatter block, not horizontal rule)
+- Code block with blank lines inside (must not be split into two blocks)
+- Consecutive headings with no paragraph between them
+- Empty article (zero content blocks)
+- Single-block article (just frontmatter)
+- List items as one block vs. multiple blocks
+- Blockquote containing blank lines
+
+**Effort:** XS (CC: ~20 min).
+
+**Depends on:** Plugin scaffold + `write_magma` block-indexed redesign.
+
+---
+
+## [P2 — ERUPT v1.5] `search_turns(query)` Tool — Transcript Index
+
+**What:** Add a `search_turns(query)` tool to the main extraction pass. Backed by a pre-built TF-IDF index over the transcript built at extraction start alongside the vault index. Returns up to 5 turn indices mentioning the concept.
+
+**Why:** Currently the agent finds when a concept was first mentioned by scanning from turn 0 in 20-turn chunks via `read_turns`. For a 200-turn conversation, that's up to 10 calls. A `search_turns` tool reduces this to O(1).
+
+**How to apply:** Build transcript TF-IDF index at extraction start (alongside vault index). Add `search_turns(query: string)` as Tool N in the main extraction pass. Returns `{ results: [{ turnIndex, preview }] }`, up to 5 results sorted by relevance.
+
+**Effort:** S (CC: ~30 min for index construction + tool handler).
+
+**Depends on:** v1 agentic pipeline validated in production. Measure whether backward scan is actually a bottleneck before implementing.
+
+---
+
+## [P2 — ERUPT v1.5] Inline Range Granularity for `write_magma`
+
+**What:** Extend `write_magma` with inline range support — update a specific sentence within a paragraph by anchor text, without rewriting the whole block.
+
+**Why:** Block-level writes are a major improvement over full-article rewrites. For v1.5, surgical inline edits would further reduce token cost for citation additions and single-sentence corrections.
+
+**How to apply:** Add `inline: { anchor: string, replace: string }` field to `write_magma`. When `inline` is present, find the `anchor` text within the target block and replace it with `replace`. Fall back to full block replace if anchor not found.
+
+**Effort:** S (CC: ~30 min for implementation + tests).
+
+**Depends on:** v1 block-indexed `write_magma` shipped and validated.
+
+---
+
+## [P1 — ERUPT v1.5] Claude Code + Codex CLI Source Support (Hook-Triggered Extraction)
+
+**What:** Add Claude Code and Codex CLI as extraction source types. Developers running coding agents all day generate high-value intellectual output that currently vanishes. This integration lets Erupt extract those sessions into Magma automatically via a hook trigger.
+
+**Trigger flow:**
+1. User configures a post-session hook in Claude Code (`~/.claude/hooks/`) or Codex CLI
+2. Hook fires a shell command: `obsidian plugin:command erupt:extract-session --source claude-code --session <id>`
+3. Obsidian CLI (1.12+) passes the command to the running Obsidian app
+4. Erupt reads the session file, runs the extraction pipeline, writes to `.magma/wiki/`
+
+**Source format work required:**
+- **Claude Code:** Sessions stored as JSONL at `~/.claude/projects/<slug>/<session-id>.jsonl`. Each line is a turn object with role + content blocks. Write a `ClaudeCodeAdapter` that converts to Erupt's internal `Turn[]` format with correct turn indices.
+- **Codex CLI (OpenAI):** Format TBD — requires research at implementation time. Write a `CodexAdapter` on the same interface.
+- Both adapters must preserve turn index fidelity (the extraction pipeline's `read_turns` tool depends on stable indices).
+
+**Hard constraints:**
+- **Requires Obsidian CLI 1.12** — still Early Access (Catalyst license) as of 2026-04-24. Do not build until 1.12 is GA and free for all users.
+- **Requires Obsidian app running** — CLI is not headless. Users who code with Obsidian closed get nothing.
+- **Hook installation is out-of-band** — Erupt cannot install hooks into Claude Code or Codex automatically. Provide a setup guide in settings: copy-pasteable hook script, instructions for each tool.
+
+**Scope boundary (v1.5 only):**
+- One-shot extraction per session end: hook fires → Erupt extracts entire session → done.
+- Incremental / continuous sync (re-extract only new turns from an in-progress session) is **deferred to v2**. It requires high-watermark tracking per source session and turn-dedup logic that needs design work.
+
+**Effort:** M (CC: ~2-3 hours for adapters + hook spec + settings UI section).
+
+**Depends on:** Obsidian CLI 1.12 GA. v1 extraction pipeline validated in production.
+
+---
+
 ## [PRE-LAUNCH — ERUPT] Verify Magma Folder Exclusion API
 
 **What:** Confirm that `app.vault.setConfig('userIgnoreFilters', [..., '.magma'])` works in Obsidian 1.5+ to hide `.magma/` from the file explorer and Quick Switcher.
