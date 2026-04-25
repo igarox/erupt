@@ -9,7 +9,7 @@
  *   npm run deploy -- /path/to/vault          # same as second form
  */
 
-import { readFileSync, existsSync, mkdirSync, copyFileSync, rmSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, rmSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 import { createInterface } from 'readline';
@@ -80,6 +80,51 @@ async function pickVault(vaults) {
   return chosen;
 }
 
+// ── .env → data.json injection ─────────────────────────────────────────────
+
+function parseEnv() {
+  const envPath = resolve('.env');
+  if (!existsSync(envPath)) return {};
+  const lines = readFileSync(envPath, 'utf8').split('\n');
+  const result = {};
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (val) result[key] = val;
+  }
+  return result;
+}
+
+function injectDevSettings(pluginDir) {
+  const env = parseEnv();
+  const mapping = {
+    ERUPT_BYOK_API_KEY: 'byokApiKey',
+    ERUPT_AUTH_TOKEN:   'authToken',
+    ERUPT_PLAN:         'plan',
+  };
+
+  const injected = {};
+  for (const [envKey, settingKey] of Object.entries(mapping)) {
+    if (env[envKey]) injected[settingKey] = env[envKey];
+  }
+
+  if (Object.keys(injected).length === 0) return;
+
+  const dataPath = join(pluginDir, 'data.json');
+  let existing = {};
+  if (existsSync(dataPath)) {
+    try { existing = JSON.parse(readFileSync(dataPath, 'utf8')); } catch { /* start fresh */ }
+  }
+
+  const merged = { ...existing, ...injected };
+  writeFileSync(dataPath, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+  console.log(`\nInjected dev settings into data.json: ${Object.keys(injected).join(', ')}`);
+}
+
 // ── Deploy ──────────────────────────────────────────────────────────────────
 
 function deploy(vaultPath) {
@@ -112,6 +157,7 @@ function deploy(vaultPath) {
     copied++;
   }
 
+  injectDevSettings(pluginDir);
   console.log(`\nDeployed ${copied}/${BUILD_FILES.length} files → ${pluginDir}`);
 
   if (missing.length > 0) {
