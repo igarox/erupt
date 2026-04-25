@@ -237,6 +237,29 @@ should be well-commented to make community PRs easy.
 
 ---
 
+## [P2 — ERUPT] Magma Explorer Pane — Custom Folder Icon
+
+**What:** The Magma Explorer ribbon and pane header currently use Obsidian's generic `'folder'` icon. It should have a distinct visual that signals "Magma" — something folder-shaped but clearly not the native file tree.
+
+**Design intent (from DESIGN.md):** "A folder with Magma ember-glow treatment (distinct from the Erupt icon). `--icon-color` at rest; no persistent accent highlight."
+
+**Options:**
+1. **SVG icon registered via `addIcon()`** — Obsidian's `addIcon('magma-folder', '<svg>...</svg>')` registers a custom icon. Use a folder silhouette with a glowing crack or lava-drip cut into the base. Same geometric grammar as the Erupt icon (angular, minimal, flat-filled). Fill: dark base (`#1A1A1A` or transparent) + `--magma-accent` (`#8B1A1A`) for the interior glow.
+2. **Obsidian built-in closest match** — `'folder-open'` or `'flame'` from Lucide (the icon set Obsidian uses). Quick workaround; not branded.
+
+**Recommendation:** Option 1. Register a custom SVG in `onload()` via `addIcon()`, then use `'magma-folder'` everywhere the pane references `'folder'`. Design the SVG as a folder outline with a small ember/crack detail at the bottom-center — legible at 16×16.
+
+**Ribbon position:** The Magma icon should sit between the native Files icon and the native Search icon in the left ribbon strip. Obsidian does not expose a public API for ordering ribbon icons relative to core items — achieving this requires DOM manipulation after `onload()` to move the ribbon element to the correct slot. Fragile but feasible; verify after each Obsidian version bump.
+
+**Files to update:**
+- `main.ts` `onload()` — call `addIcon('magma-folder', svgString)` before `addRibbonIcon`, then move the returned ribbon element to the correct DOM position
+- `main.ts` — `addRibbonIcon('folder', ...)` → `addRibbonIcon('magma-folder', ...)`
+- `src/ui/magma-explorer-view.ts` — `getIcon() { return 'folder'; }` → `return 'magma-folder';`
+
+**Effort:** S (design: ~30 min to draw the SVG; implementation: CC ~15 min including ribbon reorder).
+
+---
+
 ## [P2 — ERUPT v1.5] Final Pass Tool Enrichment: `compare_articles`
 
 **What:** Add a `compare_articles(pathA, pathB)` tool to the final pass contradiction
