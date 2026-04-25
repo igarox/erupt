@@ -110,13 +110,15 @@ export default class EruptPlugin extends Plugin {
     );
 
     const ribbonIconEl = this.addRibbonIcon('magma-graph', 'Open Magma graph', () => this.openMagmaExplorer());
-    // Position after native graph view button; falls back to default position if not found
-    setTimeout(() => {
+    // Position after native graph view button once layout is fully ready.
+    // Uses icon class (locale-independent) rather than aria-label text.
+    this.app.workspace.onLayoutReady(() => {
       const ribbonContainer = ribbonIconEl.parentElement;
       if (!ribbonContainer) return;
-      const graphBtn = ribbonContainer.querySelector('[aria-label="Open graph view"]') as HTMLElement | null;
+      const graphSvg = ribbonContainer.querySelector('svg.lucide-graph');
+      const graphBtn = graphSvg?.closest<HTMLElement>('.side-dock-ribbon-action');
       if (graphBtn) graphBtn.after(ribbonIconEl);
-    }, 0);
+    });
 
     this.registerObsidianProtocolHandler('auth', async (params) => {
       const token = params['token'];
