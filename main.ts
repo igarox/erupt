@@ -111,13 +111,44 @@ export default class EruptPlugin extends Plugin {
 
     const ribbonIconEl = this.addRibbonIcon('magma-graph', 'Open Magma graph', () => this.openMagmaExplorer());
     // Position after native graph view button once layout is fully ready.
-    // Uses icon class (locale-independent) rather than aria-label text.
     this.app.workspace.onLayoutReady(() => {
-      const ribbonContainer = ribbonIconEl.parentElement;
-      if (!ribbonContainer) return;
-      const graphSvg = ribbonContainer.querySelector('svg.lucide-graph');
-      const graphBtn = graphSvg?.closest<HTMLElement>('.side-dock-ribbon-action');
-      if (graphBtn) graphBtn.after(ribbonIconEl);
+      // Try the direct parent first; fall back to the left ribbon strip.
+      const directParent = ribbonIconEl.parentElement;
+      const searchRoot: Element =
+        directParent?.closest('.workspace-ribbon') ??
+        document.querySelector('.workspace-ribbon.mod-left') ??
+        directParent ??
+        document.body;
+
+      let graphBtn: HTMLElement | null = null;
+
+      // Strategy 1: SVG icon class — Obsidian maps 'graph' to different Lucide icons by version
+      for (const cls of ['lucide-graph', 'lucide-git-pull-request', 'lucide-network', 'lucide-workflow', 'lucide-git-merge', 'lucide-share-2']) {
+        const btn = searchRoot.querySelector(`svg.${cls}`)
+          ?.closest<HTMLElement>('.side-dock-ribbon-action, .clickable-icon');
+        if (btn && btn !== ribbonIconEl) { graphBtn = btn; break; }
+      }
+
+      // Strategy 2: aria-label containing 'graph' (English; case-insensitive), excluding our own
+      if (!graphBtn) {
+        for (const el of Array.from(searchRoot.querySelectorAll<HTMLElement>('[aria-label]'))) {
+          const label = el.getAttribute('aria-label') ?? '';
+          if (/graph/i.test(label) && !/magma/i.test(label) && el !== ribbonIconEl) {
+            graphBtn = el; break;
+          }
+        }
+      }
+
+      if (graphBtn) {
+        graphBtn.after(ribbonIconEl);
+      } else {
+        // Diagnostic: log ribbon contents so we can identify the right selector
+        console.debug('[erupt] graph ribbon button not found; ribbon items:',
+          Array.from(searchRoot.querySelectorAll('[aria-label]'))
+            .map(el => `"${el.getAttribute('aria-label')}" .${el.className}`)
+            .join(' | ')
+        );
+      }
     });
 
     this.registerObsidianProtocolHandler('auth', async (params) => {
