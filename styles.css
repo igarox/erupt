@@ -1,1 +1,467 @@
-/* Erupt plugin styles — see DESIGN.md for token definitions */
+/* Erupt plugin styles — tokens and components. See DESIGN.md for design rationale. */
+
+/* ─── 1. CSS custom properties ──────────────────────────────────── */
+
+.theme-dark, .theme-light {
+  --erupt-accent:        #E85D26;   /* ember orange — Erupt brand surface color */
+  --erupt-accent-hover:  #CC4D1E;
+  --erupt-accent-light:  #FEF0EA;
+  --erupt-success:       #16A34A;
+  --erupt-warning:       #D97706;
+  --erupt-error:         #DC2626;
+  /* Magma surface tokens — Magma Explorer pane only, not Erupt accent */
+  --magma-accent:        #8B1A1A;
+  --magma-accent-subtle: rgba(139, 26, 26, 0.08);
+}
+
+/* ─── 2. shimmer-product: geological thermal loop ───────────────── */
+/* Used on: "Erupt" word in status bar during active extraction,
+   "Erupt" eyebrow in completion modal, article rows on write flash */
+
+.erupt-magic-label {
+  background: linear-gradient(
+    90deg,
+    #E85D26 0%, #F5A623 25%, #FFE580 45%, #A8FF78 65%, #78FFD6 80%, #E85D26 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: erupt-shimmer 3s linear infinite;
+}
+
+@keyframes erupt-shimmer {
+  to { background-position: 200% center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .erupt-magic-label {
+    background: linear-gradient(90deg, #E85D26 0%, #F5A623 50%, #E85D26 100%);
+    background-size: 100% auto;
+    animation: none;
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}
+
+/* ─── 3. shimmer-brand: holographic "by Slipstream" byline ─────── */
+/* Mouse-reactive: JS sets --mx / --my CSS vars from mousemove event.
+   Falls back to static gradient under prefers-reduced-motion. */
+
+.slipstream-byline {
+  --mx: 0.5;
+  --my: 0.5;
+  background: linear-gradient(
+    calc(60deg + (var(--mx) - 0.5) * 120deg),
+    #FF0055, #FF6200, #FFE500, #00FF94, #00C8FF, #0066FF, #6B00FF
+  );
+  background-size: 200% 200%;
+  background-position: calc(var(--mx) * 100%) calc(var(--my) * 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transition: background-position 0.05s ease-out;
+  font-size: var(--font-ui-small);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slipstream-byline {
+    background: linear-gradient(
+      90deg, #FF0055, #FF6200, #FFE500, #00FF94, #00C8FF, #0066FF, #6B00FF
+    );
+    background-size: 100% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    transition: none;
+  }
+}
+
+/* ─── 4. Status bar ─────────────────────────────────────────────── */
+
+.erupt-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-size: var(--font-ui-small);
+}
+
+.erupt-status-word {
+  transition: color 0.15s ease-out;
+}
+
+.erupt-status-detail {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  white-space: pre;
+}
+
+.erupt-status-cancel {
+  cursor: pointer;
+  color: var(--text-faint);
+  padding: 0 2px;
+  border-radius: var(--radius-s);
+  transition: color 0.15s ease-out;
+}
+.erupt-status-cancel:hover {
+  color: var(--text-muted);
+}
+
+/* State modifier classes — applied to .erupt-status-bar, color the word span */
+.erupt-status-idle .erupt-status-word      { color: var(--text-muted); }
+.erupt-status-active .erupt-status-word    { color: var(--text-normal); }
+.erupt-status-success .erupt-status-word   { color: var(--erupt-success); }
+.erupt-status-warning .erupt-status-word   { color: var(--erupt-warning); }
+.erupt-status-error .erupt-status-word     { color: var(--erupt-error); }
+.erupt-status-cancelled .erupt-status-word { color: var(--text-muted); }
+
+/* Screen-reader-only live region — visually hidden, accessible */
+.erupt-aria-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── 5. Magma Explorer pane ────────────────────────────────────── */
+
+.magma-explorer-container {
+  background: var(--magma-accent-subtle);
+  height: 100%;
+}
+
+.magma-explorer-header {
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  padding: 8px;
+  color: var(--text-muted);
+}
+
+.magma-folder-row,
+.magma-file-row {
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+  border-radius: var(--radius-s);
+  color: var(--text-normal);
+  user-select: none;
+}
+
+.magma-folder-row {
+  color: var(--text-muted);
+}
+
+.magma-file-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.magma-empty-state {
+  padding: 12px 8px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-style: italic;
+}
+
+/* Lock banner — hidden by default, shown during extraction */
+.magma-lock-banner {
+  display: none;
+}
+
+.magma-lock-banner--active {
+  display: block;
+  border-left: 3px solid var(--erupt-warning);
+  background: rgba(217, 119, 6, 0.10);
+  padding: 6px 8px;
+  font-size: var(--font-ui-small);
+  color: var(--text-warning);
+  margin-bottom: 4px;
+}
+
+/* ─── 6. Completion modal ───────────────────────────────────────── */
+
+.erupt-modal-eyebrow {
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.erupt-modal-subheading {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.erupt-warning-banner {
+  border-left: 3px solid var(--erupt-warning);
+  background: rgba(217, 119, 6, 0.10);
+  padding: 8px 12px;
+  margin: 12px 0;
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  font-size: var(--font-ui-small);
+}
+
+.erupt-warning-banner a {
+  color: var(--text-accent);
+}
+
+.erupt-folder-path {
+  display: block;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-top: 2px;
+  margin-bottom: 0;
+  background: none;
+}
+
+.erupt-warning-paths {
+  margin: 6px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.erupt-warning-path-item {
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  background: var(--background-modifier-form-field);
+  padding: 1px 4px;
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  display: block;
+}
+
+.erupt-warning-log-link {
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* Feedback thumbs row */
+.erupt-feedback-row {
+  text-align: center;
+  margin: 12px 0;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  transition: opacity 0.3s ease;
+}
+
+.erupt-feedback-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2em;
+  padding: 0 4px;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.1s ease-out, transform 0.1s ease-out;
+}
+.erupt-feedback-btn:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.erupt-feedback-thanks {
+  color: var(--erupt-success);
+  font-size: var(--font-ui-small);
+}
+
+.erupt-modal-ctas {
+  margin-top: 16px;
+}
+
+.erupt-skip-link {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.erupt-skip-link:hover {
+  color: var(--text-normal);
+}
+
+/* ─── 7. Clarifying questions step ─────────────────────────────── */
+
+.erupt-question-row {
+  margin-bottom: 16px;
+}
+
+.erupt-question-text {
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: var(--text-normal);
+}
+
+.erupt-question-context {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.erupt-question-textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  font-family: var(--font-interface);
+  font-size: var(--font-ui-medium);
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--input-radius);
+  padding: 6px 8px;
+  color: var(--text-normal);
+  box-sizing: border-box;
+}
+.erupt-question-textarea:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+/* ─── 8. Draft review step ──────────────────────────────────────── */
+
+.erupt-article-path {
+  display: block;
+  margin: 8px 0;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.erupt-draft-preview {
+  max-height: 200px;
+  overflow-y: scroll;
+  background: var(--background-modifier-form-field);
+  padding: 8px;
+  border-radius: var(--radius-s);
+  font-size: 0.85em;
+  font-family: var(--font-monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-muted);
+  margin: 8px 0;
+}
+
+/* ─── 9. Session picker modal ───────────────────────────────────── */
+
+.erupt-session-subtitle {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+.erupt-session-list {
+  margin: 12px 0;
+}
+
+.erupt-session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  outline: none;
+}
+
+.erupt-session-row[aria-selected="true"],
+.erupt-session-row:focus {
+  background: var(--background-modifier-hover);
+  outline: none;
+}
+
+.erupt-session-row:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+}
+
+.erupt-session-title {
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.erupt-session-date {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.erupt-session-turns {
+  font-size: var(--font-ui-small);
+  font-family: var(--font-monospace);
+  color: var(--text-faint);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.erupt-modal-footer {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.erupt-modal-footer a {
+  font-size: var(--font-ui-small);
+  color: var(--text-accent);
+  text-decoration: none;
+}
+.erupt-modal-footer a:hover {
+  text-decoration: underline;
+}
+
+.erupt-empty-state {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* ─── 10. Length compliance modal ───────────────────────────────── */
+
+.erupt-suppress-link {
+  margin-top: 8px;
+}
+
+.erupt-suppress-link a {
+  font-size: var(--font-ui-small);
+  color: var(--text-faint);
+  text-decoration: none;
+}
+.erupt-suppress-link a:hover {
+  color: var(--text-muted);
+}
+
+/* ─── 11. Settings panel byline ─────────────────────────────────── */
+
+.erupt-settings-byline {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+  text-align: center;
+}
+
+/* ─── 12. Magma tab accent (editor tabs) ────────────────────────── */
+
+.workspace-tab-header[data-path^=".magma/wiki/"] {
+  border-top: 2px solid var(--erupt-accent-light);
+}
+
+.workspace-tab-header.is-active[data-path^=".magma/wiki/"] {
+  border-top: 2px solid var(--erupt-accent);
+  background: rgba(232, 93, 38, 0.08);
+}

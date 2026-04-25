@@ -3,8 +3,8 @@
   "name": "Erupt",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Extract structured notes from AI conversations into your vault.",
+  "description": "Extract structured notes from AI conversations into your Obsidian vault. Paste a conversation from Claude, ChatGPT, or Gemini, run Extract Notes, and Erupt writes clean Markdown articles to .magma/wiki/ — with citations, confidence levels, and cross-links kept consistent across every extraction.",
   "author": "Slipstream",
-  "authorUrl": "https://slipstream.app",
+  "authorUrl": "https://slipstream.now",
   "isDesktopOnly": true
 }

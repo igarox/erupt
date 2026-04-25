@@ -49,7 +49,7 @@ Erupt is an Obsidian plugin (TypeScript, Obsidian Plugin API).
 **Build toolchain:** esbuild (standard Obsidian plugin toolchain)
 
 **Plan tiers:**
-- **Free:** 3 lifetime extraction jobs. Routes through Slipstream proxy (`api.slipstream.app/proxy/claude`). Requires Slipstream account (JWT). No API key required.
+- **Free:** 3 lifetime extraction jobs. Routes through Slipstream proxy (`api.slipstream.now/proxy/claude`). Requires Slipstream account (JWT). No API key required.
 - **Local ($5/mo):** Ollama at `http://localhost:11434`. No proxy, no account. Agentic pipeline for tool-use models; 3-pass fallback for non-tool-use models (Phi3 etc.).
 - **Cloud ($15-20/mo):** Unlimited. Routes through Slipstream proxy. Requires Slipstream account (JWT). Haiku 4.5 default + Sonnet boost toggle.
 

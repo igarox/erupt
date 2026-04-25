@@ -13,7 +13,7 @@ Status: Pre-launch. Planned dependencies are marked accordingly.
 |---|---|---|---|
 | Anthropic API | Core extraction AI (Free/BYOK + Cloud plans) | **HIGH** — Cloud plan non-functional without it | BYOK plan: ban affects individual user only, not Slipstream. Cloud plan: multi-key rotation + rate-limit monitoring. Long-term: support OpenAI / Gemini as BYOK alternatives so users aren't locked to Anthropic. |
 | Ollama (user-hosted) | Local plan AI | **NONE** — fully self-hosted by user | No dependency on Slipstream infrastructure. No mitigation needed. |
-| api.slipstream.app proxy *(planned)* | Cloud plan request routing | **HIGH** — single point of failure for Cloud plan | Deploy to at least two regions (primary: Railway; standby: Fly.io or Render). Health check endpoint required. Plugin must surface a clear "proxy unreachable" error rather than silently failing. |
+| api.slipstream.now proxy *(planned)* | Cloud plan request routing | **HIGH** — single point of failure for Cloud plan | Deploy to at least two regions (primary: Railway; standby: Fly.io or Render). Health check endpoint required. Plugin must surface a clear "proxy unreachable" error rather than silently failing. |
 
 ---
 
@@ -29,7 +29,7 @@ Status: Pre-launch. Planned dependencies are marked accordingly.
 
 | Dependency | Role | Risk | Mitigation |
 |---|---|---|---|
-| auth.slipstream.app *(planned)* | Cloud plan JWT issuance | **HIGH** — if unreachable, Cloud users can't authenticate | Self-hosted auth service — avoid Auth0/Clerk/Firebase. JWT validation is stateless; tokens remain valid until expiry even if auth service is temporarily down. Set token lifetime to 7–30 days to survive short outages. |
+| auth.slipstream.now *(planned)* | Cloud plan JWT issuance | **HIGH** — if unreachable, Cloud users can't authenticate | Self-hosted auth service — avoid Auth0/Clerk/Firebase. JWT validation is stateless; tokens remain valid until expiry even if auth service is temporarily down. Set token lifetime to 7–30 days to survive short outages. |
 
 ---
 

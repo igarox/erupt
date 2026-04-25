@@ -10,7 +10,7 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 
 ## [BLOCKER — ERUPT] Build Slipstream API Proxy Backend
 
-**What:** `api.slipstream.app/proxy/claude` — required for both Free tier (server-side job counter enforcement) and Cloud plan (proxy extraction). Plugin routes by plan tier: Free / Cloud → proxy (JWT bearer auth), Local → Ollama at `http://localhost:11434`.
+**What:** `api.slipstream.now/proxy/claude` — required for both Free tier (server-side job counter enforcement) and Cloud plan (proxy extraction). Plugin routes by plan tier: Free / Cloud → proxy (JWT bearer auth), Local → Ollama at `http://localhost:11434`.
 
 **Why:** The per-account job counter for Free tier enforcement runs server-side. Cloud plan cannot function without the proxy. Local plan ships without it and uses Ollama.
 
@@ -33,13 +33,13 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 
 ## [BLOCKER — ERUPT] Slipstream Account Auth System
 
-**What:** Free and Cloud plan users authenticate with a Slipstream account. The plugin opens a browser auth flow (`auth.slipstream.app`), user signs in, JWT returned and stored via `Plugin.saveData()`.
+**What:** Free and Cloud plan users authenticate with a Slipstream account. The plugin opens a browser auth flow (`auth.slipstream.now`), user signs in, JWT returned and stored via `Plugin.saveData()`.
 
 **Why:** Both Free and Cloud tiers route through the proxy. The proxy validates JWT to enforce the Free tier job counter and Cloud plan entitlement. Local plan users do NOT need an account.
 
 **JWT payload:** `{ plan: 'free'|'local'|'cloud', valid_until: ISO8601, user_id }`
 
-**How to apply:** Implement OAuth or email/password auth at `auth.slipstream.app`. After successful auth, redirect to Obsidian deep-link (`obsidian://erupt/auth?token=<jwt>`). Plugin receives JWT, validates expiry on load + before each API call, stores securely via `Plugin.saveData()`.
+**How to apply:** Implement OAuth or email/password auth at `auth.slipstream.now`. After successful auth, redirect to Obsidian deep-link (`obsidian://erupt/auth?token=<jwt>`). Plugin receives JWT, validates expiry on load + before each API call, stores securely via `Plugin.saveData()`.
 
 **Cons:** Significant infrastructure work (auth service, JWT issuance, account DB). Can reuse Bleeper's auth system if one exists.
 
@@ -102,6 +102,27 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 **How to apply:** Add `"isDesktopOnly": true` to `manifest.json`. One line.
 
 **Effort:** XS (CC: ~1 min).
+
+---
+
+## [BLOCKER — ERUPT] Decide: Proprietary Extraction Engine vs. Open Plugin
+
+**What:** The full extraction engine — system prompts (`src/extraction/prompt.ts`), agentic loop (`src/extraction/loop.ts`), tool handlers (`src/extraction/tools.ts`), final pass (`src/extraction/final-pass.ts`), and fallback pipeline (`src/extraction/fallback.ts`) — currently lives in the open plugin code. A bundled `.js` file is readable by anyone who installs the plugin.
+
+**Why this is a blocker before public launch:** The Local plan is $5/mo and uses a functionally similar extraction engine to Cloud. The product doc originally described "Obsidian plugin → local binary (invoked via CLI) → local processing or cloud API" — a proprietary binary was the intended separation. That was later superseded by "plugin routes directly" (Decision Log, Product Doc §12), but the IP protection concern was never explicitly resolved.
+
+**Options:**
+1. **Accept open code.** Ship as-is. The system prompts and pipeline logic are visible. Defensibility comes from the brand, the cloud backend, and ongoing iteration — not secrecy. Obsidian Community Plugins submission requires source availability anyway.
+2. **Obfuscate the production build.** Run the esbuild output through a JS obfuscator. Raises the bar for casual inspection but provides no real protection.
+3. **Re-introduce a local binary for extraction logic.** Extraction engine compiled to a native binary (e.g. via Bun/pkg). Plugin becomes a thin IPC client. Proprietary binary ships alongside the plugin. Breaks Obsidian Community Plugins path (binaries not permitted) but works for direct distribution. Highest IP protection; highest engineering cost.
+
+**Current state:** Fine for internal testing. Must be resolved before any public release or community plugins submission.
+
+**How to apply:** Make the decision, update the build pipeline if needed, and remove this blocker.
+
+**Depends on:** Distribution strategy decision (Community Plugins vs. direct/paid distribution).
+
+**Effort:** Decision XS; implementation varies by option (option 1: 0, option 2: S, option 3: L).
 
 ---
 
@@ -407,7 +428,7 @@ this.settings = Object.assign(DEFAULT_SETTINGS, await this.loadData());
 **What:** Add the pre-auth state to the Free and Cloud settings panel sections. Currently the settings spec only documents the post-auth state. Required:
 - "Connect Slipstream account" button (`mod-cta`) in the "Account" section when `authToken` is absent or expired
 - After auth: green status dot + "Connected — [email]" label + "Disconnect" button (`mod-warning`)
-- Clicking "Connect Slipstream account" opens the browser auth flow at `auth.slipstream.app`
+- Clicking "Connect Slipstream account" opens the browser auth flow at `auth.slipstream.now`
 
 **Why:** Without the Connect button, there is no in-plugin entry point to authentication. Users are stuck.
 
