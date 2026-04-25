@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, TFile, Vault } from 'obsidian';
+import { App, Notice, Plugin, PluginSettingTab, Setting, TFile, Vault, addIcon } from 'obsidian';
 import { FirstRunModal } from './src/ui/first-run-modal';
 import Anthropic from '@anthropic-ai/sdk';
 import { DEFAULT_EXTRACTION_CONFIG, createRunState, type ExtractionRunState } from './src/types';
@@ -94,7 +94,29 @@ export default class EruptPlugin extends Plugin {
     this.registerVaultListeners();
     this.addSettingTab(new EruptSettingTab(this.app, this));
     this.registerView(MAGMA_VIEW_TYPE, leaf => new MagmaExplorerView(leaf, this));
-    this.addRibbonIcon('folder', 'Open Magma Explorer', () => this.openMagmaExplorer());
+
+    // Custom graph icon: standard hub-and-spoke graph with top node as flame silhouette
+    addIcon('magma-graph',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<line x1="12" y1="11" x2="5" y2="17"/>' +
+      '<line x1="12" y1="11" x2="19" y2="17"/>' +
+      '<line x1="12" y1="11" x2="12" y2="20"/>' +
+      '<line x1="5" y1="17" x2="19" y2="17"/>' +
+      '<circle cx="5" cy="17" r="1.8"/>' +
+      '<circle cx="19" cy="17" r="1.8"/>' +
+      '<circle cx="12" cy="20" r="1.8"/>' +
+      '<path d="M12 2 C11 2 9 4.5 9 6.5 C9 8.5 10.3 10 12 10 C13.7 10 15 8.5 15 6.5 C15 4.5 13 2 12 2 Z"/>' +
+      '</svg>'
+    );
+
+    const ribbonIconEl = this.addRibbonIcon('magma-graph', 'Open Magma graph', () => this.openMagmaExplorer());
+    // Position after native graph view button; falls back to default position if not found
+    setTimeout(() => {
+      const ribbonContainer = ribbonIconEl.parentElement;
+      if (!ribbonContainer) return;
+      const graphBtn = ribbonContainer.querySelector('[aria-label="Open graph view"]') as HTMLElement | null;
+      if (graphBtn) graphBtn.after(ribbonIconEl);
+    }, 0);
 
     this.registerObsidianProtocolHandler('auth', async (params) => {
       const token = params['token'];

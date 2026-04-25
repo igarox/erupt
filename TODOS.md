@@ -237,26 +237,9 @@ should be well-commented to make community PRs easy.
 
 ---
 
-## [P2 — ERUPT] Magma Explorer Pane — Custom Folder Icon
+## [DONE — ERUPT] Magma Explorer Pane — Custom Graph Icon
 
-**What:** The Magma Explorer ribbon and pane header currently use Obsidian's generic `'folder'` icon. It should have a distinct visual that signals "Magma" — something folder-shaped but clearly not the native file tree.
-
-**Design intent (from DESIGN.md):** "A folder with Magma ember-glow treatment (distinct from the Erupt icon). `--icon-color` at rest; no persistent accent highlight."
-
-**Options:**
-1. **SVG icon registered via `addIcon()`** — Obsidian's `addIcon('magma-folder', '<svg>...</svg>')` registers a custom icon. Use a folder silhouette with a glowing crack or lava-drip cut into the base. Same geometric grammar as the Erupt icon (angular, minimal, flat-filled). Fill: dark base (`#1A1A1A` or transparent) + `--magma-accent` (`#8B1A1A`) for the interior glow.
-2. **Obsidian built-in closest match** — `'folder-open'` or `'flame'` from Lucide (the icon set Obsidian uses). Quick workaround; not branded.
-
-**Recommendation:** Option 1. Register a custom SVG in `onload()` via `addIcon()`, then use `'magma-folder'` everywhere the pane references `'folder'`. Design the SVG as a folder outline with a small ember/crack detail at the bottom-center — legible at 16×16.
-
-**Ribbon position:** The Magma icon should sit between the native Files icon and the native Search icon in the left ribbon strip. Obsidian does not expose a public API for ordering ribbon icons relative to core items — achieving this requires DOM manipulation after `onload()` to move the ribbon element to the correct slot. Fragile but feasible; verify after each Obsidian version bump.
-
-**Files to update:**
-- `main.ts` `onload()` — call `addIcon('magma-folder', svgString)` before `addRibbonIcon`, then move the returned ribbon element to the correct DOM position
-- `main.ts` — `addRibbonIcon('folder', ...)` → `addRibbonIcon('magma-folder', ...)`
-- `src/ui/magma-explorer-view.ts` — `getIcon() { return 'folder'; }` → `return 'magma-folder';`
-
-**Effort:** S (design: ~30 min to draw the SVG; implementation: CC ~15 min including ribbon reorder).
+Implemented as a custom `magma-graph` SVG icon: hub-and-spoke graph layout with the top hub node rendered as a flame silhouette (teardrop path) instead of a circle. Positioned after the native "Open graph view" ribbon button via `setTimeout` DOM insertion (Obsidian exposes no public API for ribbon ordering — verify after version bumps). Label is "Open Magma graph". `getIcon()` in `MagmaExplorerView` also returns `'magma-graph'`.
 
 ---
 
@@ -538,3 +521,28 @@ new Notice("Your session expired — reconnect your Slipstream account for futur
 **Effort:** XS (CC: ~5 min — check `settings.authToken` expiry date at completion time).
 
 **Depends on:** Auth system + plugin scaffold.
+
+---
+
+## [P1 — ERUPT Strategy] Obsidian Sync Positioning — Do Not Compete
+
+**What:** Think through Erupt's strategic relationship with Obsidian's native sync product before any sync-adjacent features are added to a higher tier plan.
+
+**Context:** Erupt writes structured notes into the user's local vault (`.magma/wiki/`). Obsidian Sync already handles vault synchronization across devices. There is a plausible product path where Erupt Cloud could offer a "Slipstream-hosted vault mirror" or cross-device Magma sync as a premium tier feature — but this would put Slipstream in direct competition with Obsidian Sync, a key revenue line for Obsidian.
+
+**Why this is worth thinking about carefully:**
+- Obsidian's team has been explicitly tolerant of the plugin ecosystem and supportive of the community. Taking their revenue is an adversarial move.
+- Competing with the host platform's monetization strategy is a high-risk position for a plugin in their store. We depend on Obsidian for distribution.
+- The founder has no desire to take money from Obsidian. This is a values constraint, not just a business calculation.
+
+**What to resolve before building anything sync-adjacent:**
+1. Define the exact feature: is it "cross-device Magma sync" or "server-side vault mirror for AI batch processing"? These have very different Obsidian Sync overlap profiles.
+2. Check Obsidian's plugin policies for explicit restrictions on sync/storage features.
+3. Consider complementary positioning: Erupt extracts; Obsidian Sync carries the results to other devices. Let Obsidian handle sync entirely. If cloud storage is ever needed (e.g. for AI batch operations over a hosted vault copy), frame it as an optional "AI workspace" that does not replace or compete with Obsidian Sync.
+4. If a hosted vault feature is ever built, it should be explicitly scoped to AI processing pipelines only — not positioned as a sync alternative to users.
+
+**Decision needed from founder before any implementation.** This is a strategic and values-level question, not a technical one.
+
+**Effort:** 0 (this is a thinking and alignment TODO, not a code TODO).
+
+**Depends on:** Founder alignment on product positioning vs. Obsidian ecosystem.

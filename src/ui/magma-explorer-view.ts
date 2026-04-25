@@ -13,7 +13,7 @@ export class MagmaExplorerView extends ItemView {
 
   getViewType() { return MAGMA_VIEW_TYPE; }
   getDisplayText() { return 'Magma'; }
-  getIcon() { return 'folder'; }
+  getIcon() { return 'magma-graph'; }
 
   async onOpen() {
     await this.render();
