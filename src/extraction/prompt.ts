@@ -86,6 +86,15 @@ source_note: <path/to/source-note.md>
 - No leading slash, no trailing slash, no double slashes
 - The \`path\` frontmatter value and the physical filename (without \`.md\`) must match exactly
 
+**Acronym convention in titles**
+When an article title introduces a concept by its full name followed by a recognizable acronym, format the title as "Full Name (ACRONYM)":
+- ✅ \`ElectroMag Pitch Rotor (EMPR)\`
+- ✅ \`Individual Blade Control (IBC)\`
+- ❌ \`ElectroMag Pitch Rotor EMPR\` — missing parentheses
+- ❌ \`Electromagnetically Pitch Rotor EMPR\` — wrong name AND missing parentheses
+
+This applies to the \`title:\` frontmatter field and the article filename/path. It does NOT apply when the acronym is used as a prefix in a compound title (\`EMPR Blade Morphing\`, \`EMPR Patent Novelty\`). Use the exact terminology from the transcript — do not paraphrase or reword the concept's name.
+
 **\`source_note\` frontmatter field**
 Every article must include a \`source_note\` field containing the Obsidian path of the vault note from which it was extracted. This is the canonical back-reference to the source. The source note path is provided in your context seed as "Source note: <path>" at the top of each turn message. Copy it exactly — do not infer or fabricate it.
 
@@ -263,9 +272,20 @@ Language signals for committed work (→ standalone article permitted):
 
 When an article grows past 8,000 characters or a section is long enough to fully stand alone:
 1. Create the child article with the full section content and its own lead paragraph
-2. Replace the section in the parent with a 1–2 paragraph summary
-3. Open the summary with a wikilink: "For full details, see [[Child Article Title]]."
+2. Replace the section in the parent with a hatnote line followed by 2–3 sentences of summary — nothing more
+3. The hatnote line format is: \`*→ Main article: [[Child Article Title]]*\`
 4. The child article's lead should reference the parent context where helpful
+
+Example of a correctly split parent section:
+\`\`\`markdown
+## Novelty Assessment
+
+*→ Main article: [[EMPR Patent Novelty and Prior Art]]*
+
+{{USER}} conducted an exhaustive prior-art search and concluded that EMPR is genuinely novel. All existing electromagnetic pitch control systems use active blade-mounted motors; {{USER}}'s passive field-gradient approach is architecturally distinct and does not infringe existing patents. {{USER}} assessed freedom to operate at 95% confidence. (turns 4, 5)
+\`\`\`
+
+The parent section must NOT contain a full write-up — only the hatnote and the 2–3 sentence summary. Readers who want detail follow the link to the child article.
 
 **Stub discipline**
 
