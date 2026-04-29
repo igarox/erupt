@@ -6,6 +6,7 @@ export const MAGMA_VIEW_TYPE = 'magma-explorer';
 export class MagmaExplorerView extends ItemView {
   private magmaRowMap = new Map<string, HTMLElement>();
   private lockBannerEl: HTMLElement | null = null;
+  private refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(leaf: WorkspaceLeaf, private plugin: EruptPlugin) {
     super(leaf);
@@ -24,9 +25,16 @@ export class MagmaExplorerView extends ItemView {
     } else {
       this.app.workspace.onLayoutReady(() => this.render());
     }
-    this.registerEvent(this.app.vault.on('create', () => this.render()));
-    this.registerEvent(this.app.vault.on('delete', () => this.render()));
-    this.registerEvent(this.app.vault.on('rename', () => this.render()));
+    const magmaPrefix = this.plugin.getMagmaRoot();
+    const scheduleRefresh = (path: string) => {
+      if (!path.startsWith(magmaPrefix)) return;
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = setTimeout(() => this.render(), 200);
+    };
+    this.registerEvent(this.app.vault.on('create', (f) => scheduleRefresh(f.path)));
+    this.registerEvent(this.app.vault.on('modify', (f) => scheduleRefresh(f.path)));
+    this.registerEvent(this.app.vault.on('delete', (f) => scheduleRefresh(f.path)));
+    this.registerEvent(this.app.vault.on('rename', (f) => scheduleRefresh(f.path)));
   }
 
   async onClose() {

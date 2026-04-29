@@ -551,6 +551,7 @@ export default class EruptPlugin extends Plugin {
         config: DEFAULT_EXTRACTION_CONFIG,
         vaultScanner: this.vaultScanner,
         magmaRoot: MAGMA_WIKI_ROOT,
+        sourceNotePath: activeFile.path,
         onProgress: (label: string) => {
           const fpLabel = label.includes('compliance') ? 'compliance' : 'consistency';
           this.updateStatusBar({ kind: 'final_pass', label: fpLabel });

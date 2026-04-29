@@ -287,7 +287,11 @@ in production and contradiction detection quality has been measured.
 
 ---
 
-## [P1 — ERUPT] Block Parser Test Suite
+## [DONE — ERUPT] Block Parser Test Suite
+
+> **Completed 2026-04-28.** `src/extraction/block-parser.ts` + 18 tests in
+> `src/extraction/__tests__/block-parser.test.ts`. All passing. vitest added as
+> test runner. Block-indexed write_magma implementation remains v1.5 scope.
 
 **What:** Before using block-indexed `write_magma` in any real extraction, write a dedicated test suite for the Markdown block parser.
 
@@ -675,6 +679,27 @@ new Notice("Your session expired — reconnect your Slipstream account for futur
 **Effort:** 0 (this is a thinking and alignment TODO, not a code TODO).
 
 **Depends on:** Founder alignment on product positioning vs. Obsidian ecosystem.
+
+---
+
+## [P2 — ERUPT] Magma Article TOC Post-Processor — Settings Toggle + Remove Button
+
+**What:** The planned per-article table of contents (Wikipedia-style, injected after the lead paragraph by an Obsidian MarkdownPostProcessor) needs:
+1. A settings toggle: `"Show table of contents in Magma articles"` (default: on). Gates whether the post-processor injects the TOC.
+2. A "Remove existing TOCs" command or button in settings, for users who installed a separate TOC plugin that already added TOC markup to articles — lets them clean up without manual edits.
+
+**Why:** TOC injection conflicts with user-installed TOC plugins (e.g. `obsidian-dynamic-toc`, `obsidian-plugin-toc`). Without a settings toggle, the TOC post-processor has no off switch. Without a remove button, users who hit the conflict have no clean recovery path.
+
+**How to apply:**
+1. Add `showMagmaToc: boolean` (default `true`) to `EruptSettings` + `DEFAULT_SETTINGS`.
+2. Gate the TOC post-processor: `if (this.settings.showMagmaToc) { this.registerMarkdownPostProcessor(...) }`.
+3. Add a "Remove Magma TOCs" command (`erupt-remove-magma-tocs`) that iterates all `.magma/wiki/` articles and strips any injected TOC div. The TOC div should have a stable class (`magma-toc`) for reliable identification.
+
+**Note:** TOC injection itself (the post-processor logic) is a separate TODO (implement first, add toggle second). Gate this TODO on the base TOC post-processor being shipped.
+
+**Effort:** XS (CC: ~20 min once base TOC post-processor exists).
+
+**Depends on:** Base Magma TOC post-processor (not yet implemented).
 
 ---
 

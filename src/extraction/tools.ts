@@ -80,10 +80,10 @@ export const MAIN_TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {
-        path:       { type: 'string', description: 'Article path without .md. Lowercase, hyphens, slashes.' },
+        path:       { type: 'string', description: 'Article path without .md. Title Case with spaces. E.g. "rotors/EMPR Blade Morphing".' },
         content:    { type: 'string', description: 'Full Markdown content including frontmatter.' },
         citations:  { type: 'array', items: { type: 'integer' }, description: 'Turn numbers cited in this article.' },
-        confidence: { type: 'string', enum: ['stub', 'provisional'], description: 'Confidence level.' },
+        confidence: { type: 'string', enum: ['stub', 'provisional', 'settled'], description: 'Confidence level.' },
       },
       required: ['path', 'content', 'citations', 'confidence'],
     },
@@ -112,14 +112,16 @@ export const MAIN_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
-const PATH_RE = /^[a-z0-9_\/\-]+$/;
+// Paths use Title Case with spaces: "rotors/EMPR Blade Morphing"
+// Allow a-z A-Z 0-9 spaces hyphens underscores forward-slashes
+const PATH_RE = /^[a-zA-Z0-9 _/\-]+$/;
 
 function validateMagmaPath(path: string): string | null {
   if (!path) return 'path is required';
   if (path.startsWith('/')) return 'path must not start with /';
   if (path.includes('//')) return 'path must not contain //';
   if (path.includes('..')) return 'path must not contain ..';
-  if (!PATH_RE.test(path)) return 'path must match [a-z0-9_/\\-]+';
+  if (!PATH_RE.test(path)) return 'path must use Title Case with spaces (e.g. "rotors/EMPR Blade Morphing")';
   return null;
 }
 
@@ -249,8 +251,8 @@ async function handleWriteMagma(
   if (!Array.isArray(citations) || citations.length === 0) {
     return { error: 'citations must be a non-empty array' };
   }
-  if (confidence !== 'stub' && confidence !== 'provisional') {
-    return { error: 'confidence must be stub or provisional' };
+  if (confidence !== 'stub' && confidence !== 'provisional' && confidence !== 'settled') {
+    return { error: 'confidence must be stub, provisional, or settled' };
   }
 
   const fullPath = `${ctx.magmaRoot}/${path}.md`;

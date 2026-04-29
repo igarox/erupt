@@ -13,6 +13,7 @@ export interface FinalPassOptions {
   config: ExtractionConfig;
   vaultScanner: VaultScanner;
   magmaRoot: string;
+  sourceNotePath: string;
   onProgress: (label: string) => void;
 }
 
@@ -67,7 +68,10 @@ async function runComplianceCheck(
   opts: FinalPassOptions,
 ): Promise<void> {
   const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: `Review and fix this article:\n\npath: ${path}\n\n${content}` },
+    {
+      role: 'user',
+      content: `Source note: ${opts.sourceNotePath}\n\nReview and fix this article:\n\npath: ${path}\n\n${content}`,
+    },
   ];
   await runFinalPassLoop(messages, COMPLIANCE_TOOLS, COMPLIANCE_SYSTEM_PROMPT, opts);
 }
