@@ -396,6 +396,93 @@ in production and contradiction detection quality has been measured.
 
 ---
 
+## [P1 — ERUPT] AI-Assisted Parsing for Non-Standard Transcript Formats
+
+**Problem:** The rule-based parser (`src/transcript-parser.ts`) handles a fixed set of known formats. Any export from an app that uses non-standard field names, role values, nesting, or structure will silently fall through to the single-turn fallback — losing all turn boundaries and degrading extraction quality significantly.
+
+**Proposed approach — two-stage parsing:**
+1. **Pre-pass (cheap):** Before invoking the extraction pipeline, send the first ~500 tokens of the note content to the model with a single question: "Is this a chat transcript? If yes, what are the role labels and content field names?" This is a fast, inexpensive call — one round-trip, no tools.
+2. **AI parse (if needed):** If the pre-pass confirms it is a transcript but the rule-based parser returned 0 or 1 turns, invoke a second pass: send the full content to the model and ask it to return the transcript as a JSON array of `{"role": "human"|"assistant", "content": "..."}` objects. Feed that output back into `extractMessages()`.
+
+**Gate:** Only invoke the AI parser if the rule-based parser fails AND the pre-pass confirms the content is a transcript. Do not invoke it for notes that are genuinely not transcripts — the pre-pass is the guard.
+
+**Fallback behavior if AI parse also fails:** Proceed with the single-turn fallback and surface a warning to the user (see "No Recognisable Conversation" TODO).
+
+**Cost:** The pre-pass is ~$0.00X per note. The AI parse pass is small (structured extraction, no tools). Acceptable for the value of correct turn boundaries.
+
+**Effort:** S (CC: ~30 min — pre-pass call + structured output parse + wiring into `extractNotes()`).
+
+**Depends on:** `src/transcript-parser.ts` + `buildClient()` in `main.ts`.
+
+---
+
+## [P1 — ERUPT] No Recognisable Conversation — Surface Clearly with Format Guidance
+
+**Problem:** When `parseTranscript` finds no usable turns, the current behavior is a 4-second dismissible Notice: `"Erupt: no conversation turns found in this note."` This tells the user what happened but not why or what to do about it. A user who just pasted a conversation and gets this message has no idea whether their paste was malformed, the wrong note was active, or the format isn't supported.
+
+**Required:** Replace the bare Notice with actionable feedback — either a modal or a richer Notice — that:
+1. States clearly that no conversation format was detected in the active note
+2. Lists the two supported formats with brief examples (JSON-per-line, `## Human` / `## Assistant` headings)
+3. Mentions the fallback: any note with at least one paragraph will be treated as a single turn if neither format matches — so a very short paste might extract as one turn rather than failing
+
+**Also consider:** partial parse — `parseTranscript` may detect some lines as valid JSON turns but silently skip malformed lines. If <50% of lines parse, consider surfacing a warning: `"Parsed N of M lines — the rest were not recognisable conversation turns."` so the user knows the extraction may be incomplete.
+
+**Effort:** XS (CC: ~15 min).
+
+**Depends on:** `src/transcript-parser.ts` (exists).
+
+---
+
+## [P1 — ERUPT] Extraction Agent Has No Awareness of Conversation Purpose
+
+**Problem:** The extraction pipeline processes turns without any representation of what the conversation was *for*. The agent has no basis to distinguish a deliberate architectural decision from a tangential mention, a rejected approach from an adopted one, or a dead-end debugging hypothesis from the actual fix. Everything gets weighted roughly equally against the stub/provisional threshold.
+
+**Compounding factor: purpose drift.** Conversations don't have a single stable goal — they wander. A session might start as a debugging conversation, pivot into a design discussion, then end as a planning session. A flat "conversation goal" statement derived from the whole transcript would misrepresent the later sections. The relevance filter needs to be temporally aware — what the conversation was trying to accomplish *at turn N* is what matters for evaluating turn N's content.
+
+**What's needed:** Some form of local purpose tracking — either a sliding-window summary of recent turns that gives the agent a "what are we trying to do right now" signal, or explicit phase detection (debugging → designing → planning). The agent can then use this to calibrate extraction weight: abandoned approaches → skip or stub, resolved decisions → provisional, active uncertainty → clarifying question.
+
+**Not yet designed.** This is a problem statement, not a solution spec. Resolve before v1 ships if extraction quality on long, drifting conversations is poor.
+
+**Effort:** Unknown — requires design before scoping.
+
+---
+
+## [P1 — ERUPT] Graceful Handling of File References and Unavailable Attachments in Transcripts
+
+**What:** Conversations often reference files, images, code attachments, or external resources that are not present in the pasted transcript — only the text of the conversation is available to the extraction pipeline. The extraction agent must handle these references without hallucinating content or producing confused articles.
+
+**Common cases:**
+- Attached files referenced by name: `"Looking at your main.py..."`, `"[Attached: schema.sql]"`, `"Based on the screenshot you shared..."`
+- Images described by the AI: `"I can see in the image that..."` where the image itself is absent
+- External URLs or docs summarised by the AI without the source being present
+- Partial tool-use output (e.g. Claude Code file reads) where the file content appears in the transcript but the actual file is not in the vault
+
+**Required behavior:**
+- The extraction system prompt must explicitly instruct the agent: when a turn references a file or attachment that is not available, extract what can be inferred from the surrounding conversation about that file — its name, purpose, structure as described — and note the gap clearly using `confidence: stub` and a prose note like `"The full content of this file was not available in the transcript (turn N)."`
+- Do NOT skip turns that reference missing files — the conversation around the file is still valuable
+- Do NOT hallucinate file content based on the filename or partial description
+- If the AI's response in a later turn summarises or quotes from an attached file, that summary IS available and should be extracted
+
+**Prompt change needed:**
+Add a section to `EXTRACTION_SYSTEM_PROMPT` in `src/extraction/prompt.ts`:
+
+```
+## Handling missing attachments and file references
+
+Conversations often reference files, images, or documents that are not included in the transcript text. When you encounter a reference to an unavailable attachment:
+- Extract what is described or inferred about the file from the surrounding turns
+- Set confidence: stub
+- Include a sentence like: "The full content of [filename] was not available in the transcript. (turn N)"
+- Do NOT fabricate content based on the filename or partial description
+- If the AI's reply quotes or summarises the file, treat that summary as the available source
+```
+
+**Effort:** XS (CC: ~10 min — prompt addition only, no code changes).
+
+**Depends on:** `src/extraction/prompt.ts` (exists and implemented).
+
+---
+
 ## [P1 — ERUPT] Community Plugins Description + Settings Field Tooltips + Empty States
 
 **What:** Minimum documentation surfaces required before Obsidian Community Plugins submission:
@@ -524,6 +611,48 @@ new Notice("Your session expired — reconnect your Slipstream account for futur
 
 ---
 
+## [EXPLORE — ERUPT] Vent Blocks: Erupt Integration Surface
+
+**What:** When "Vent" ships (see workspace TODOS.md for full concept), Erupt is the first integration target. Magma articles become live documents — not just static extracted notes but notes that surface real-time metadata about their own state via Vent blocks.
+
+**Erupt-specific block candidates:**
+- `slipstream/magma-confidence` — renders confidence level (`stub` / `provisional`), last extraction date, citing turn count for the current article inline
+- `slipstream/magma-related` — lists related Magma articles by semantic similarity (backed by the vault scanner TF-IDF index, no network)
+- `slipstream/extraction-status` — shows whether the current note has been extracted, how many turns it produced, and a "Re-extract" CTA (deep-links to the Erupt command)
+
+**Why Erupt is the right first target:** Erupt already owns the `.magma/wiki/` namespace and the vault index. These blocks just surface what the extraction pipeline already knows — zero new data fetching required, so they work at the static-substitution tier (no daemon, no network).
+
+**Erupt as a block registry participant:** The Erupt plugin registers its blocks at load time via `vent.register(...)` — the hook API Vent exposes to third-party plugins. No Vent store dependency required for these blocks.
+
+**Effort:** XS-S per block once Vent's plugin hook API exists. Zero effort before Vent v1.
+
+**Depends on:** Vent v1 shipped with plugin hook registration API. Erupt v1 shipped.
+
+---
+
+## [P2 — ERUPT / CROSS-PRODUCT] Slipstream Custom Emoji Set
+
+**What:** A branded emoji set themed to the Slipstream geological/volcanic aesthetic — packaged as a loadable asset that any Slipstream product can consume. In Erupt: used in Magma Explorer, completion modal, and status surfaces. In non-Obsidian products (Bleeper, future web apps): loaded as a sprite sheet or icon font and aliased to standard emoji codepoints or custom shortcodes.
+
+**Why:** Generic system emojis (🌋, 📁, ✓) undermine the premium, distinctive feel of the design system. A custom set creates visual coherence across the entire Slipstream product family and is a reusable brand asset — one investment, used everywhere.
+
+**Scope:**
+- Erupt-specific: extraction-related metaphors (magma flow, geological layers, crystallization states for `stub` / `provisional` / `complete` article confidence), vent/channel navigation icons for Magma Explorer
+- Cross-product: Slipstream brand primitives (spectral/prismatic light motifs, core action states: running, complete, warning, error, cancelled) that inherit from `DESIGN.md` industrial-kinetic aesthetic
+- Format: SVG sprite sheet for web products; Obsidian-compatible icon registration via `addIcon()` for Erupt (already in use for `magma-graph`)
+
+**How to apply:**
+1. Design core set (10–20 icons) aligned with `DESIGN.md` aesthetic — spectral gradients, kinetic geometry, volcanic motifs
+2. Package as `@slipstream/icons` (monorepo package or standalone repo) with SVG source + sprite sheet export
+3. Erupt consumes via `addIcon()` registration at plugin load; web products via CSS sprite or inline SVG import
+4. Define shortcode aliases for any emoji used in UI copy (e.g. `:magma-stub:`, `:magma-done:`) so copy can reference icons symbolically
+
+**Effort:** M (design: 4-8 hours; packaging + integration per product: S each).
+
+**Depends on:** `DESIGN.md` aesthetic finalized (done). No code blockers.
+
+---
+
 ## [P1 — ERUPT Strategy] Obsidian Sync Positioning — Do Not Compete
 
 **What:** Think through Erupt's strategic relationship with Obsidian's native sync product before any sync-adjacent features are added to a higher tier plan.
@@ -546,3 +675,51 @@ new Notice("Your session expired — reconnect your Slipstream account for futur
 **Effort:** 0 (this is a thinking and alignment TODO, not a code TODO).
 
 **Depends on:** Founder alignment on product positioning vs. Obsidian ecosystem.
+
+---
+
+## [POST-V1 — ERUPT] Trim vaultTitles in extraction contextSeed
+
+**What:** `src/extraction/loop.ts:75-87` builds the per-turn `contextSeed` by including every markdown file's basename via `opts.vault.getMarkdownFiles().map(f => f.basename)`. For users with 500-1000+ vault notes, that's a linear cost paid on every turn of every extraction.
+
+**Why:** The new v1 system prompt is ~3-5KB longer than current. Combined with full-vault-titles bloat in contextSeed, big vaults will pay disproportionately on multi-turn extractions. P3 finding from /plan-eng-review on 2026-04-28.
+
+**How to apply:** Replace `getMarkdownFiles().map(f => f.basename)` with a relevance filter. Options:
+1. Recently modified (last N files by mtime)
+2. Notes referenced (by basename match) in the current conversation
+3. Sliding window centered on the active note's folder
+4. Combination — recent + referenced, deduplicated
+
+**Pros:** Meaningful cost reduction on big vaults; better signal-to-noise in agent context.
+
+**Cons:** Requires deciding what "relevant" means; over-filtering loses search-friendliness for the agent.
+
+**Context:** Existing behavior, not introduced by v1, but v1's longer prompt makes the asymmetry worse. Captured by /plan-eng-review 2026-04-28.
+
+**Depends on:** Nothing.
+
+**Effort:** S (human: ~2 hours / CC: ~30 min).
+
+---
+
+## [POST-V1 — ERUPT] Run rail + tactical transcripts as post-ship regression
+
+**What:** After v1 extraction quality work ships and the EMPR re-test passes, run the rail (`Claude-Reimagining American rail with auto-train integration.md`, 923KB, ~50 turns expected) and tactical (`Claude-Appalachian mountain squad tactical loadout concept.md`, 65KB, list-shaped content) transcripts through the new extractor. Write a brief diagnostic report on each per the format of `.dump/Reports/2026-04-28-magma-output-analysis-empr.md`.
+
+**Why:** The /office-hours session on 2026-04-28 explicitly deferred this validation step for project-dev-budget reasons, with the founder's stated reasoning that "the changes needed are likely coarse and apply to all transcripts. we can verify by running the others [later]." This TODO is the "later." Without it, we don't know if v1 generalizes or over-fit to EMPR.
+
+**How to apply:**
+1. After v1 ships and EMPR re-test passes 5/7 success criteria, snapshot the post-v1 magma output for EMPR.
+2. Wipe magma vault, run extraction on rail. Diagnose against the same failure-category framework as the EMPR report.
+3. Wipe magma vault, run extraction on tactical. Same diagnostic.
+4. Compare failure modes across all 3 transcripts. If new failure categories appear that v1 doesn't address, surface as v2 priorities with data.
+
+**Pros:** Confirms v1 quality across conversation shapes; surfaces v2 priorities with data instead of intuition.
+
+**Cons:** ~$2 in API spend + a few hours of diagnostic time. Founder explicitly chose to defer this once.
+
+**Context:** Documented as known gap during /office-hours session 2026-04-28. Serves as the actual validation that EMPR was a coarse-enough representative test.
+
+**Depends on:** v1 ship.
+
+**Effort:** S (human: ~1 day / CC: ~2 hours for diagnostic reports).

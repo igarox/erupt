@@ -199,10 +199,14 @@ async function handleReadMagma(
 
   const fullPath = `${ctx.magmaRoot}/${path}.md`;
   const file = ctx.vault.getFileByPath(fullPath);
-  if (!file) return { error: 'not found' };
-
-  const content = await ctx.vault.read(file);
-  return { content };
+  if (file) {
+    return { content: await ctx.vault.read(file) };
+  }
+  // Vault doesn't index .magma on restart — fall back to adapter
+  if (await ctx.vault.adapter.exists(fullPath)) {
+    return { content: await ctx.vault.adapter.read(fullPath) };
+  }
+  return { error: 'not found' };
 }
 
 function handleSearchVault(
@@ -251,17 +255,22 @@ async function handleWriteMagma(
 
   const fullPath = `${ctx.magmaRoot}/${path}.md`;
 
-  // Snapshot existing content before overwrite
-  const existing = ctx.vault.getFileByPath(fullPath);
-  if (existing) {
-    const prev = await ctx.vault.read(existing);
-    ctx.state.lastGoodContent.set(fullPath, prev);
-  }
-
-  // Write the file (create dirs as needed)
+  // Ensure parent directories exist (adapter-level, no vault-index side effects)
   await ensureDir(ctx.vault, fullPath);
-  if (existing) {
-    await ctx.vault.modify(existing, content);
+
+  const indexed = ctx.vault.getFileByPath(fullPath);
+  if (indexed) {
+    // File is in vault index — standard modify path
+    const prev = await ctx.vault.read(indexed);
+    ctx.state.lastGoodContent.set(fullPath, prev);
+    await ctx.vault.modify(indexed, content);
+  } else if (await ctx.vault.adapter.exists(fullPath)) {
+    // File on disk but not in vault index (Obsidian doesn't re-index .magma on restart).
+    // Remove and recreate so vault.create() re-indexes it — makes it openable in Editor.
+    const prev = await ctx.vault.adapter.read(fullPath);
+    ctx.state.lastGoodContent.set(fullPath, prev);
+    await ctx.vault.adapter.remove(fullPath);
+    await ctx.vault.create(fullPath, content);
   } else {
     await ctx.vault.create(fullPath, content);
   }

@@ -4,6 +4,7 @@ import type { ExtractionRunState, ExtractionConfig } from '../types';
 import type { VaultScanner } from '../vault-scanner';
 import { handleTool, MAIN_TOOLS, TOOL_NAMES, type ToolContext } from './tools';
 import { EXTRACTION_SYSTEM_PROMPT } from './prompt';
+import { ensureDir } from '../fs';
 
 export interface LoopOptions {
   client: Anthropic;
@@ -14,6 +15,7 @@ export interface LoopOptions {
   config: ExtractionConfig;
   vaultScanner: VaultScanner;
   magmaRoot: string;
+  sourceNotePath: string;
   onProgress: (turn: number, total: number, etaMs?: number) => void;
   onWriteMagma: (path: string) => void;
 }
@@ -74,6 +76,7 @@ async function processTurn(
   const vaultTitles = opts.vault.getMarkdownFiles().map(f => f.basename);
 
   const contextSeed = [
+    `Source note: ${opts.sourceNotePath}`,
     magmaTitles.length > 0
       ? `Magma articles in this session:\n${magmaTitles.join('\n')}`
       : 'Magma articles in this session: (none yet)',
@@ -186,10 +189,16 @@ async function appendLog(
 ): Promise<void> {
   const logPath = magmaRoot.replace(/\/wiki$/, '') + '/extraction_log.jsonl';
   const line = JSON.stringify({ ...entry, ts: Date.now() }) + '\n';
+
+  // Use adapter.exists() — vault.getFileByPath() misses recently created files
   const file = vault.getFileByPath(logPath);
   if (file) {
     await vault.modify(file, (await vault.read(file)) + line);
+  } else if (await vault.adapter.exists(logPath)) {
+    const existing = await vault.adapter.read(logPath);
+    await vault.adapter.write(logPath, existing + line);
   } else {
+    await ensureDir(vault, logPath);
     await vault.create(logPath, line);
   }
 }

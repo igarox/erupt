@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, TFile, Vault, addIcon } from 'obsidian';
+import { App, Menu, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, Vault, addIcon } from 'obsidian';
 import { FirstRunModal } from './src/ui/first-run-modal';
 import Anthropic from '@anthropic-ai/sdk';
 import { DEFAULT_EXTRACTION_CONFIG, createRunState, type ExtractionRunState } from './src/types';
@@ -18,6 +18,7 @@ import {
   getKnownCapability,
   type ModelCapability,
 } from './src/models';
+import { substituteUserPlaceholder } from './src/markdown/user-placeholder';
 
 // ---- Settings ---------------------------------------------------------------
 
@@ -26,6 +27,7 @@ interface EruptSettings {
   authToken: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
+  userPlaceholder: string;
   suppressedCompatibilityNotice: string[]; // persisted; NOT rendered in settings UI
   suppressedLengthCheck: string[];          // persisted; NOT rendered in settings UI
   wikigameUnlocked: boolean;
@@ -39,6 +41,7 @@ const DEFAULT_SETTINGS: EruptSettings = {
   authToken: '',
   ollamaBaseUrl: 'http://localhost:11434',
   ollamaModel: '',
+  userPlaceholder: 'Notetaker',
   suppressedCompatibilityNotice: [],
   suppressedLengthCheck: [],
   wikigameUnlocked: false,
@@ -94,6 +97,10 @@ export default class EruptPlugin extends Plugin {
     this.registerVaultListeners();
     this.addSettingTab(new EruptSettingTab(this.app, this));
     this.registerView(MAGMA_VIEW_TYPE, leaf => new MagmaExplorerView(leaf, this));
+    this.registerMenuItems();
+    this.registerMarkdownPostProcessor((el) => {
+      substituteUserPlaceholder(el, this.settings.userPlaceholder);
+    });
 
     // Custom graph icon: standard hub-and-spoke graph with top node as flame silhouette
     addIcon('magma-graph',
@@ -109,46 +116,40 @@ export default class EruptPlugin extends Plugin {
       '</svg>'
     );
 
-    const ribbonIconEl = this.addRibbonIcon('magma-graph', 'Open Magma graph', () => this.openMagmaExplorer());
-    // Position after native graph view button once layout is fully ready.
+    this.addRibbonIcon('magma-graph', 'Open Magma graph', () => this.openMagmaExplorer());
+    // onChange() calls setChildrenInPlace(items) which re-renders from the items array.
+    // DOM manipulation is overwritten. Reorder leftRibbon.items directly then call onChange.
     this.app.workspace.onLayoutReady(() => {
-      // Try the direct parent first; fall back to the left ribbon strip.
-      const directParent = ribbonIconEl.parentElement;
-      const searchRoot: Element =
-        directParent?.closest('.workspace-ribbon') ??
-        document.querySelector('.workspace-ribbon.mod-left') ??
-        directParent ??
-        document.body;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const leftRibbon = (this.app as any).workspace.leftRibbon;
+      if (!leftRibbon?.items) return;
 
-      let graphBtn: HTMLElement | null = null;
+      type RibbonItem = { id: string; icon: string; title: string; hidden: boolean; buttonEl?: HTMLElement };
+      const items: RibbonItem[] = leftRibbon.items;
 
-      // Strategy 1: SVG icon class — Obsidian maps 'graph' to different Lucide icons by version
-      for (const cls of ['lucide-graph', 'lucide-git-pull-request', 'lucide-network', 'lucide-workflow', 'lucide-git-merge', 'lucide-share-2']) {
-        const btn = searchRoot.querySelector(`svg.${cls}`)
-          ?.closest<HTMLElement>('.side-dock-ribbon-action, .clickable-icon');
-        if (btn && btn !== ribbonIconEl) { graphBtn = btn; break; }
-      }
+      const myIdx     = items.findIndex(it => it.id === `${this.manifest.id}:Open Magma graph`);
+      const graphIdx  = items.findIndex(it => it.icon === 'lucide-git-fork');
+      // Quick Switcher = the "search" icon (lucide-file-search)
+      const searchIdx = items.findIndex(it => it.icon === 'lucide-file-search');
 
-      // Strategy 2: aria-label containing 'graph' (English; case-insensitive), excluding our own
-      if (!graphBtn) {
-        for (const el of Array.from(searchRoot.querySelectorAll<HTMLElement>('[aria-label]'))) {
-          const label = el.getAttribute('aria-label') ?? '';
-          if (/graph/i.test(label) && !/magma/i.test(label) && el !== ribbonIconEl) {
-            graphBtn = el; break;
-          }
-        }
-      }
+      if (myIdx === -1 || graphIdx === -1 || myIdx === graphIdx) return;
 
-      if (graphBtn) {
-        graphBtn.after(ribbonIconEl);
+      const [myItem] = items.splice(myIdx, 1);
+
+      // Adjust indices after removal of myIdx
+      const adj = (i: number) => i === -1 ? -1 : i > myIdx ? i - 1 : i;
+      const gAdj = adj(graphIdx);
+      const sAdj = adj(searchIdx);
+
+      let insertAt: number;
+      if (sAdj !== -1 && sAdj > gAdj) {
+        insertAt = sAdj;       // before search, which is already after graph
       } else {
-        // Diagnostic: log ribbon contents so we can identify the right selector
-        console.debug('[erupt] graph ribbon button not found; ribbon items:',
-          Array.from(searchRoot.querySelectorAll('[aria-label]'))
-            .map(el => `"${el.getAttribute('aria-label')}" .${el.className}`)
-            .join(' | ')
-        );
+        insertAt = gAdj + 1;   // immediately after graph
       }
+
+      items.splice(insertAt, 0, myItem);
+      leftRibbon.onChange(false);
     });
 
     this.registerObsidianProtocolHandler('auth', async (params) => {
@@ -194,7 +195,9 @@ export default class EruptPlugin extends Plugin {
 
   private getMagmaExplorerView(): MagmaExplorerView | null {
     const leaves = this.app.workspace.getLeavesOfType(MAGMA_VIEW_TYPE);
-    return leaves.length > 0 ? (leaves[0].view as MagmaExplorerView) : null;
+    if (leaves.length === 0) return null;
+    const view = leaves[0].view;
+    return view instanceof MagmaExplorerView ? view : null;
   }
 
   // ---- Status bar -----------------------------------------------------------
@@ -372,6 +375,28 @@ export default class EruptPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'erupt-clear-lock',
+      name: 'Clear stuck extraction lock',
+      callback: async () => {
+        const lockPath = MAGMA_WIKI_ROOT.replace(/\/wiki$/, '') + '/.lock';
+        const existsOnDisk = await this.app.vault.adapter.exists(lockPath);
+        const f = this.app.vault.getFileByPath(lockPath);
+        if (f) {
+          await this.app.vault.delete(f);
+          new Notice('Erupt: lock cleared.', 3000);
+        } else if (existsOnDisk) {
+          await this.app.vault.adapter.remove(lockPath);
+          new Notice('Erupt: lock cleared (via adapter).', 3000);
+        } else {
+          new Notice('Erupt: no lock file found.', 3000);
+        }
+        this.extractionActive = false;
+        this.getMagmaExplorerView()?.updateLockBanner();
+        this.updateStatusBar({ kind: 'idle' });
+      },
+    });
+
+    this.addCommand({
       id: 'erupt-check-article-length',
       name: 'Check article length',
       callback: async () => {
@@ -414,39 +439,44 @@ export default class EruptPlugin extends Plugin {
 
   // ---- Core command handlers ------------------------------------------------
 
-  private async extractNotes() {
+  private async extractNotes(fileOverride?: TFile) {
+    console.log('[Erupt] extractNotes called', { fileOverride: fileOverride?.path, extractionActive: this.extractionActive });
+
     if (this.extractionActive) {
       new Notice("Extraction already running — wait for it to complete or restart Obsidian if it's stuck.", 5000);
       return;
     }
 
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
-      new Notice('Erupt: open a note with a pasted conversation to extract from.', 4000);
-      return;
-    }
-
-    if (this.settings.plan === 'local') {
-      const reachable = await this.pingOllama();
-      if (!reachable) {
-        new Notice('Ollama not detected — make sure Ollama is running.', 5000);
+    try {
+      const activeFile = fileOverride ?? this.app.workspace.getActiveFile();
+      if (!activeFile) {
+        new Notice('Erupt: open a note with a pasted conversation to extract from.', 4000);
         return;
       }
-    }
+      console.log('[Erupt] activeFile:', activeFile.path, '| plan:', this.settings.plan, '| byokApiKey set:', !!this.settings.byokApiKey);
 
-    const locked = await acquireLock(this.app.vault, MAGMA_WIKI_ROOT);
-    if (!locked) {
-      new Notice('Erupt: another extraction is in progress (lock file exists).', 5000);
-      return;
-    }
+      if (this.settings.plan === 'local') {
+        const reachable = await this.pingOllama();
+        if (!reachable) {
+          new Notice('Ollama not detected — make sure Ollama is running.', 5000);
+          return;
+        }
+      }
 
-    this.extractionActive = true;
-    this.getMagmaExplorerView()?.updateLockBanner();
-    this.updateStatusBar({ kind: 'extracting', turn: 0, total: 0 });
+      const locked = await acquireLock(this.app.vault, MAGMA_WIKI_ROOT);
+      console.log('[Erupt] lock acquired:', locked);
+      if (!locked) {
+        new Notice('Erupt: another extraction is in progress (lock file exists).', 5000);
+        return;
+      }
 
-    try {
+      this.extractionActive = true;
+      this.getMagmaExplorerView()?.updateLockBanner();
+      this.updateStatusBar({ kind: 'extracting', turn: 0, total: 0 });
+
       const content = await this.app.vault.read(activeFile);
       const transcript = parseTranscript(content);
+      console.log('[Erupt] transcript turns:', transcript.length, '| first turn preview:', transcript[0]?.slice(0, 80));
       if (transcript.length === 0) {
         new Notice('Erupt: no conversation turns found in this note.', 4000);
         return;
@@ -458,6 +488,7 @@ export default class EruptPlugin extends Plugin {
       const client = buildClient(this.settings);
       const model = getModel(this.settings);
       const capability = getCapability(this.settings);
+      console.log('[Erupt] model:', model, '| capability:', capability);
 
       if (capability === '3pass' &&
           !this.settings.suppressedCompatibilityNotice.includes(model)) {
@@ -480,6 +511,7 @@ export default class EruptPlugin extends Plugin {
         config: DEFAULT_EXTRACTION_CONFIG,
         vaultScanner: this.vaultScanner,
         magmaRoot: MAGMA_WIKI_ROOT,
+        sourceNotePath: activeFile.path,
         onProgress: (turn: number, total: number) => {
           this.updateStatusBar({ kind: 'extracting', turn, total });
         },
@@ -548,6 +580,7 @@ export default class EruptPlugin extends Plugin {
         this.updateStatusBar({ kind: 'cancelled' });
       } else {
         this.updateStatusBar({ kind: 'error' });
+        console.error('[Erupt] extraction error:', err);
         new Notice(`Erupt: extraction failed — ${err instanceof Error ? err.message : String(err)}`, 5000);
       }
     } finally {
@@ -586,6 +619,71 @@ export default class EruptPlugin extends Plugin {
   private splitArticle(_file: TFile): void {
     // TODO: wire final-pass sub-pass 1 decompose for single article (Phase 10)
     new Notice('Erupt: article split from Explorer coming soon', 3000);
+  }
+
+  // ---- Context menus --------------------------------------------------------
+
+  private registerMenuItems() {
+    // File explorer right-click
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu: Menu, file: TAbstractFile) => {
+        if (!(file instanceof TFile)) return;
+        const isConversationFile = file.extension === 'md' || file.extension === 'json' || file.extension === 'txt';
+        if (!isConversationFile) return;
+
+        if (file.extension === 'md' && file.path.startsWith(MAGMA_WIKI_ROOT + '/')) {
+          menu.addItem(item =>
+            item
+              .setTitle('Check article length')
+              .setIcon('magma-graph')
+              .setSection('erupt')
+              .onClick(async () => {
+                if (this.settings.suppressedLengthCheck.includes(file.path)) {
+                  new Notice('Erupt: length check suppressed for this article.', 3000);
+                  return;
+                }
+                const content = await this.app.vault.read(file);
+                if (content.length > 8000) {
+                  new LengthComplianceModal(this.app, {
+                    file,
+                    charCount: content.length,
+                    onSplit: () => this.splitArticle(file),
+                    onSuppress: async (path) => {
+                      this.settings.suppressedLengthCheck.push(path);
+                      await this.saveSettings();
+                    },
+                  }).open();
+                } else {
+                  new Notice(`Erupt: article is ${content.length.toLocaleString()} characters — within limit.`, 3000);
+                }
+              })
+          );
+        } else {
+          menu.addItem(item =>
+            item
+              .setTitle('Extract Notes')
+              .setIcon('magma-graph')
+              .setSection('erupt')
+              .onClick(() => this.extractNotes(file))
+          );
+        }
+      })
+    );
+
+    // Editor right-click
+    this.registerEvent(
+      this.app.workspace.on('editor-menu', (menu: Menu) => {
+        const file = this.app.workspace.getActiveFile();
+        if (!file || file.path.startsWith(MAGMA_WIKI_ROOT + '/')) return;
+        menu.addItem(item =>
+          item
+            .setTitle('Extract Notes')
+            .setIcon('magma-graph')
+            .setSection('erupt')
+            .onClick(() => this.extractNotes(file))
+        );
+      })
+    );
   }
 
   // ---- Vault listeners ------------------------------------------------------
@@ -809,6 +907,20 @@ class EruptSettingTab extends PluginSettingTab {
       });
     }
 
+    // User placeholder name
+    new Setting(containerEl)
+      .setName('User placeholder name')
+      .setDesc('How your name appears in extracted notes. Default: Notetaker.')
+      .addText(text =>
+        text
+          .setPlaceholder('Notetaker')
+          .setValue(this.plugin.settings.userPlaceholder)
+          .onChange(async value => {
+            this.plugin.settings.userPlaceholder = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
     // "by Slipstream" shimmer-brand byline — always at bottom of settings panel
     const bylineEl = containerEl.createEl('div', {
       cls: 'slipstream-byline erupt-settings-byline',
@@ -826,11 +938,12 @@ class EruptSettingTab extends PluginSettingTab {
 
 function buildClient(settings: EruptSettings): Anthropic {
   if (settings.byokApiKey) {
-    return new Anthropic({ apiKey: settings.byokApiKey });
+    return new Anthropic({ apiKey: settings.byokApiKey, dangerouslyAllowBrowser: true });
   }
   return new Anthropic({
     baseURL: 'https://api.slipstream.now/proxy/claude',
     apiKey: settings.authToken,
+    dangerouslyAllowBrowser: true,
   });
 }
 
@@ -845,18 +958,44 @@ function getCapability(settings: EruptSettings): ModelCapability {
   return known ?? '3pass';
 }
 
+const LOCK_STALE_MS = 10 * 60 * 1000; // 10 minutes
+
 async function acquireLock(vault: Vault, magmaRoot: string): Promise<boolean> {
   const lockPath = magmaRoot.replace(/\/wiki$/, '') + '/.lock';
-  if (vault.getFileByPath(lockPath)) return false;
+
+  // Check actual disk — vault.getFileByPath() can miss files not yet indexed
+  const existsOnDisk = await vault.adapter.exists(lockPath);
+  if (existsOnDisk) {
+    // Check if stale (left by a crashed previous session)
+    try {
+      const raw = await vault.adapter.read(lockPath);
+      const { ts } = JSON.parse(raw) as { ts: number };
+      if (Date.now() - ts < LOCK_STALE_MS) return false; // genuinely locked
+    } catch {
+      // unreadable lock — treat as stale
+    }
+    // Stale — delete and proceed
+    await vault.adapter.remove(lockPath);
+  }
+
   await ensureDir(vault, lockPath);
-  await vault.create(lockPath, JSON.stringify({ ts: Date.now() }));
+  try {
+    await vault.create(lockPath, JSON.stringify({ ts: Date.now() }));
+  } catch {
+    return false; // lost race condition
+  }
   return true;
 }
 
 async function releaseLock(vault: Vault, magmaRoot: string): Promise<void> {
   const lockPath = magmaRoot.replace(/\/wiki$/, '') + '/.lock';
+  // Try both vault index and adapter (handles index/disk sync gaps)
   const f = vault.getFileByPath(lockPath);
-  if (f) await vault.delete(f);
+  if (f) {
+    await vault.delete(f);
+  } else if (await vault.adapter.exists(lockPath)) {
+    await vault.adapter.remove(lockPath);
+  }
 }
 
 const RECOMMENDED_OLLAMA_MODELS = new Set(['llama3.2', 'mistral:7b', 'mistral', 'phi3']);
