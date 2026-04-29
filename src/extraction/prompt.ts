@@ -233,6 +233,53 @@ Critique-shaped content includes:
 - All information in the turn is already fully covered in existing articles
 - The turn contains only vague intentions with no concrete facts to preserve
 
+## MagmaWiki Style Guide
+
+These rules govern article granularity, length, and structure. Adapted from Wikipedia's editorial standards (WP:SIZE, WP:SPLIT, WP:STUB, WP:MERGE, WP:LEAD, WP:STRUCTURE) to MagmaWiki's personal-knowledge context.
+
+**Article granularity — when to create a standalone article**
+
+Create a standalone article when a topic:
+- Was substantively discussed (not merely mentioned) in the source turn
+- Has at least 3–5 sentences of unique, specific content that cannot fit naturally as a section of an existing article
+- Represents something {{USER}} is actively working on, decided on, or deeply engaged with — not something imagined or referenced in passing
+
+Merge into a parent article as a section when:
+- The topic generates fewer than ~150 words of genuinely distinct content
+- The topic logically belongs inside a broader article and the section won't dominate it
+
+**Speculative tangents do not become standalone articles.** When {{USER}} is imagining future possibilities rather than describing committed work, the content belongs either as a paragraph inside an existing article (under a "Future Directions" or similar section) or as Open Questions — not a standalone article.
+
+Language signals for speculation (→ section or Open Question, NOT standalone article):
+- "what if we also...", "could this also...", "imagine if...", "in the future we might..."
+- "I'm wondering whether...", "this might eventually..."
+
+Language signals for committed work (→ standalone article permitted):
+- "I designed...", "the system does...", "I decided...", "we're building...", "I tested..."
+
+**Article count calibration.** A conversation with N user turns discussing distinct substantive topics should yield roughly N to 2N articles. If your article count is substantially below N, consolidation is probably too aggressive — check whether you merged distinct topics that warranted separate articles. If above 2N, you may be over-fragmenting.
+
+**Split rule — parent/child pattern**
+
+When an article grows past 8,000 characters or a section is long enough to fully stand alone:
+1. Create the child article with the full section content and its own lead paragraph
+2. Replace the section in the parent with a 1–2 paragraph summary
+3. Open the summary with a wikilink: "For full details, see [[Child Article Title]]."
+4. The child article's lead should reference the parent context where helpful
+
+**Stub discipline**
+
+A legitimate stub is 50–150 words (2–5 sentences) containing:
+- A basic definition: what is this?
+- Its relationship to {{USER}}'s work or to a parent article
+- Optionally: one concrete open question
+
+Do not create a stub for: background knowledge {{USER}} references but does not own (Wikipedia covers that); speculative tangents (see above); topics that are just alternate names for a concept already in another article.
+
+**Heading levels**
+
+Use heading levels consecutively — never skip from \`##\` directly to \`####\`. Use \`##\` for main sections, \`###\` for subsections, \`####\` only within a \`###\` block. A section with one or two sentences does not need its own heading — merge it into the nearest prose paragraph.
+
 ## Tool guide
 
 - \`read_turns(start, end)\` — retrieve turns from the transcript. Use when the current turn references something not already in your context. Read forward from turn 0, not backward from the end.

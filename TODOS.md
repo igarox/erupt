@@ -171,7 +171,13 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 
 ---
 
-## [P1 — ERUPT] Pull Wikipedia Editorial Rules for MagmaWiki Prompt Construction
+## [DONE — ERUPT] Pull Wikipedia Editorial Rules for MagmaWiki Prompt Construction
+
+> **Completed 2026-04-28.** Researched WP:SIZE, WP:SPLIT, WP:STUB, WP:MERGE, WP:LEAD,
+> WP:STRUCTURE, WP:REDIRECT. Distilled into `## MagmaWiki Style Guide` section in
+> `src/extraction/prompt.ts`. Key additions: speculative tangent rule, article granularity
+> floor (150 words), parent/child split pattern, per-turn article count calibration (N–2N),
+> stub discipline, heading level consecutiveness.
 
 **What:** Before writing the extraction system prompt and final pass compliance prompt,
 research and distill the subset of Wikipedia's editorial guidelines that apply to MagmaWiki
