@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import { ItemView, MarkdownView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import type EruptPlugin from '../../main';
 
 export const MAGMA_VIEW_TYPE = 'magma-explorer';
@@ -121,6 +121,13 @@ export class MagmaExplorerView extends ItemView {
             return;
           }
           try {
+            const existing = this.app.workspace.getLeavesOfType('markdown')
+              .find(l => l.view instanceof MarkdownView && l.view.file?.path === filePath);
+            if (existing) {
+              this.app.workspace.setActiveLeaf(existing, { focus: true });
+              this.app.workspace.revealLeaf(existing);
+              return;
+            }
             const leaf = this.app.workspace.getLeaf('tab');
             await leaf.openFile(tfile, { active: true });
             this.app.workspace.revealLeaf(leaf);
