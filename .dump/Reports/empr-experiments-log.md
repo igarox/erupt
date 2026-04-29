@@ -136,3 +136,40 @@ Bigger prompt + forced `search_magma` per potential article added overhead that 
 - **`[!critique]` fix:** The prompt now has an inline example but the model is routing the critique content into a section instead of a callout. The consolidation of critique into "Limitations" section is probably reasonable behavior — the fix may need to require the callout in ADDITION to the section, not instead of it. Or add "this section must open with a `[!critique]` callout before the prose".
 - **Article count fix:** Add a minimum article count expectation: "A conversation spanning multiple major topics should yield one article per major topic, with sub-topics becoming sections within an article rather than separate articles. As a rough guide, 4 user turns should yield 4–6 articles." Currently the per-turn intent step correctly detects topics but consolidation instruction is overriding it.
 - **Committed vs. speculative sub-classification:** The per-turn intent step needs a second axis: committed ("{{USER}} is building/has built this") vs. speculative ("{{USER}} is exploring what might be possible"). Speculative turns → `stub` confidence maximum. Explicit language signals: "what if", "could we also", "in the future", "imagine if" → speculative. "I designed", "I tested", "the system does" → committed. This is the underlying fix for the blade morphing misclassification.
+
+---
+
+## Run 4 — 2026-04-28 — MagmaWiki Style Guide added (Phase 3)
+
+**Prompt version:** `615e183` (Phase 3: MagmaWiki Style Guide section — article granularity rules, speculative tangent rule, parent/child split pattern, N–2N article count calibration, stub discipline, heading levels)
+**Articles produced:** 3
+**Cost:** $0.62
+
+### Scores
+
+| # | Criterion | Score | Notes |
+|---|-----------|-------|-------|
+| 1 | Article count 5–7 | ⚠️ | 3 articles — unchanged from Run 3 |
+| 2 | Critique verbatim + `[!critique]` marker + ≥4 concerns named | ✅ | **Fixed.** 5 named `[!critique]` callout blocks, verbatim content, turn references, descriptive headers |
+| 3 | {{USER}} placeholder | ✅ | Consistent throughout all 3 articles |
+| 4 | No patent-novelty redundancy | ✅ | Single novelty article |
+| 5 | Citation hygiene | ✅ | All turns cited; multi-turn citations correct |
+| 6 | Wikilinks + Open Questions | ✅ | Both present in all articles |
+| 7 | Cost ≤$0.45 | ❌ | **$0.62 — above $0.55 blocker. HARD FAIL.** |
+
+**Total: ~5.5/7, BLOCKED on cost ($0.62 > $0.55 blocker).**
+
+### Key wins
+- **[!critique] fully fixed.** After 3 failed runs, critique callout blocks are now properly generated — 5 distinct named critiques, verbatim content, `— Turn 1` references, correct `> [!critique]` format. The inline example in the prompt finally worked.
+- **{{USER}}, Open Questions, source_note, wikilinks, citation hygiene:** All maintained from Run 3.
+
+### Failures
+1. **Cost blocker: $0.62.** Two compounding causes: (a) Style Guide added ~54 lines to the system prompt, increasing input tokens every turn; (b) fixing `[!critique]` substantially increased output — 5 critique blocks × ~8 lines each = ~40 extra output lines not present in Run 3. Fixing criterion 2 caused criterion 7 to regress from ⚠️ to ❌.
+2. **Blade morphing: still surfaces as standalone provisional article.** The speculative-tangent language-signal rule (Phase 3) did not fire. Root cause: Turn 2 in the EMPR transcript is NOT speculative language — the user describes morphing in declarative, inventing terms with specific architectures and numbers. The model correctly classifies this turn as `developing/inventing`. The "what if / imagine if" language signals don't match. The real issue: extensions to a session's primary invention discussed in the same conversation should be sections of the primary article, not standalone articles, unless the user explicitly frames them as an independent build track.
+3. **Article count: still 3.** The N–2N calibration rule was not effective — blade morphing persisting as a standalone article prevents the count from rising, and the consolidation instruction still keeps all patent discussion in one article.
+4. **Title regression: "Electromagnetically Pitch Rotor EMPR".** Should be "ElectroMag Pitch Rotor (EMPR)" (canonical from the transcript). Title drifted between runs despite no prompt change targeting the title. The model is generating its own paraphrase of the title rather than using the transcript's name.
+
+### Path forward (Run 5)
+- **Cost reduction:** Blade morphing becoming a section saves ~100 lines of output. Trimming the Style Guide section (which is now overfitting at ~54 lines) may recover some input token overhead. Target: get back under $0.50.
+- **Primary-invention extension rule:** Replace the speculative-tangent language-signal approach with a structural rule: "When the conversation has a single primary invention as its subject (identifiable from turn 0), sub-topics in subsequent turns that extend or elaborate on that invention belong in the primary article as sections, not as standalone articles. A standalone article for a sub-topic is only warranted if the user explicitly names it as an independent development track or if it could have a lifecycle independent of the parent invention."
+- **Title anchoring:** Either add a rule requiring the agent to use the exact terminology from the first turn where a concept is named, or add title drift to the compliance pass checks.
