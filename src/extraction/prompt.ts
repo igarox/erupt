@@ -93,6 +93,13 @@ Good framing: "{{USER}} is developing an electromagnetic pitch rotor as an alter
 
 ## Tool-layer invariants (auto-enforced; \`write_magma\` will reject and tell you what to fix)
 
+**\`write_magma\` requires ALL FOUR fields on every call** — the most common first-attempt failure is omitting one of these:
+- \`path\` — string
+- \`content\` — string (full markdown including frontmatter)
+- \`citations\` — non-empty array of turn integers (e.g. \`[0, 3, 5]\`)
+- \`confidence\` — exactly one of \`"stub"\`, \`"provisional"\`, \`"settled"\`
+
+Other auto-enforced rules:
 - \`citations\` frontmatter must include every \`(turn N)\` referenced in the body
 - If \`title\` ends in \`(EMPR)\` or similar suffix, the path filename must contain it too
 - Named concerns inside \`> [!critique]\` blocks cannot be removed once written — only added/expanded

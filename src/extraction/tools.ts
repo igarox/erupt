@@ -80,14 +80,14 @@ export const MAIN_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: TOOL_NAMES.WRITE_MAGMA,
-    description: 'Write or overwrite a Magma article. Replaces the entire file. Read first if it exists.',
+    description: 'Write or overwrite a Magma article. Replaces the entire file. Read first if it exists. ALL FOUR fields are required on every call: path, content, citations (non-empty array of turn integers), confidence (stub|provisional|settled). Omitting any field will be rejected.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        path:       { type: 'string', description: 'Article path without .md. Title Case with spaces. E.g. "rotors/EMPR Blade Morphing".' },
-        content:    { type: 'string', description: 'Full Markdown content including frontmatter.' },
-        citations:  { type: 'array', items: { type: 'integer' }, description: 'Turn numbers cited in this article.' },
-        confidence: { type: 'string', enum: ['stub', 'provisional', 'settled'], description: 'Confidence level.' },
+        path:       { type: 'string', description: 'REQUIRED. Article path without .md. Title Case with spaces. E.g. "rotors/EMPR Blade Morphing".' },
+        content:    { type: 'string', description: 'REQUIRED. Full Markdown content including frontmatter.' },
+        citations:  { type: 'array', items: { type: 'integer' }, description: 'REQUIRED. Non-empty array of turn numbers cited in this article. Must include every (turn N) ref in the body.' },
+        confidence: { type: 'string', enum: ['stub', 'provisional', 'settled'], description: 'REQUIRED. One of: "stub", "provisional", "settled".' },
       },
       required: ['path', 'content', 'citations', 'confidence'],
     },
