@@ -5,6 +5,7 @@ import type { VaultScanner } from '../vault-scanner';
 import { handleTool, MAIN_TOOLS, TOOL_NAMES, type ToolContext } from './tools';
 import { EXTRACTION_SYSTEM_PROMPT } from './prompt';
 import { ensureDir } from '../fs';
+import { sleep, serializeDecisionLog } from './util';
 
 export interface LoopOptions {
   client: Anthropic;
@@ -75,6 +76,7 @@ async function processTurn(
   const magmaTitles = [...state.runArticles.keys()];
   const vaultTitles = opts.vault.getMarkdownFiles().map(f => f.basename);
 
+  const decisionLogSection = serializeDecisionLog(state.decisionLog);
   const contextSeed = [
     `Source note: ${opts.sourceNotePath}`,
     magmaTitles.length > 0
@@ -83,6 +85,7 @@ async function processTurn(
     vaultTitles.length > 0
       ? `Vault note titles:\n${vaultTitles.join('\n')}`
       : 'Vault note titles: (none)',
+    ...(decisionLogSection ? [decisionLogSection] : []),
     '',
     `Process turn ${turn}:`,
     content,
@@ -203,19 +206,6 @@ async function appendLog(
   }
 }
 
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new DOMException('Aborted', 'AbortError'));
-      return;
-    }
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(new DOMException('Aborted', 'AbortError'));
-    }, { once: true });
-  });
-}
 
 function estimateEta(startMs: number, turnsDone: number, total: number): number | undefined {
   if (turnsDone === 0) return undefined;

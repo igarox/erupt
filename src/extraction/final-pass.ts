@@ -3,7 +3,9 @@ import type { Vault } from 'obsidian';
 import type { ExtractionRunState, ExtractionConfig } from '../types';
 import type { VaultScanner } from '../vault-scanner';
 import { MAIN_TOOLS, TOOL_NAMES, handleTool, type ToolContext } from './tools';
-import { COMPLIANCE_SYSTEM_PROMPT, CONTRADICTION_SYSTEM_PROMPT } from './prompt';
+import { COMPLIANCE_SYSTEM_PROMPT, CONTRADICTION_SYSTEM_PROMPT, TRAJECTORY_REVISION_SYSTEM_PROMPT } from './prompt';
+import type { DecisionLog } from '../types';
+import { sleep, serializeDecisionLog } from './util';
 
 export interface FinalPassOptions {
   client: Anthropic;
@@ -14,13 +16,30 @@ export interface FinalPassOptions {
   vaultScanner: VaultScanner;
   magmaRoot: string;
   sourceNotePath: string;
+  transcript: string[];
+  decisionLog: DecisionLog;
   onProgress: (label: string) => void;
 }
 
+// Compliance pass runs on Haiku — it's structural checking, not reasoning.
+// Contradiction pass stays on the main extraction model.
+const COMPLIANCE_MODEL = 'claude-haiku-4-5-20251001';
+
 const COMPLIANCE_TOOLS = MAIN_TOOLS.filter(t => t.name === TOOL_NAMES.WRITE_MAGMA);
 
+const DECISION_LOG_TOOL_NAMES: string[] = [
+  TOOL_NAMES.ADD_OR_UPDATE_DECISION,
+  TOOL_NAMES.RETIRE_DECISION,
+  TOOL_NAMES.RESOLVE_QUESTION,
+];
+
 const CONTRADICTION_TOOLS = MAIN_TOOLS.filter(t =>
-  ([TOOL_NAMES.WRITE_MAGMA, TOOL_NAMES.ADD_CLARIFYING_QUESTION, TOOL_NAMES.READ_VAULT] as string[])
+  ([TOOL_NAMES.WRITE_MAGMA, TOOL_NAMES.ADD_CLARIFYING_QUESTION, TOOL_NAMES.READ_VAULT, ...DECISION_LOG_TOOL_NAMES] as string[])
+    .includes(t.name)
+);
+
+const REVISION_TOOLS = MAIN_TOOLS.filter(t =>
+  ([TOOL_NAMES.WRITE_MAGMA, TOOL_NAMES.READ_MAGMA, TOOL_NAMES.ADD_CLARIFYING_QUESTION, ...DECISION_LOG_TOOL_NAMES] as string[])
     .includes(t.name)
 );
 
@@ -29,6 +48,7 @@ export async function runFinalPass(opts: FinalPassOptions): Promise<void> {
   opts.onProgress('final pass');
   await runSubPass1(opts);
   await runSubPass2(opts);
+  await runSubPass3(opts);
 }
 
 // ─── Sub-pass 1: compliance ───────────────────────────────────────────────────
@@ -73,7 +93,7 @@ async function runComplianceCheck(
       content: `Source note: ${opts.sourceNotePath}\n\nReview and fix this article:\n\npath: ${path}\n\n${content}`,
     },
   ];
-  await runFinalPassLoop(messages, COMPLIANCE_TOOLS, COMPLIANCE_SYSTEM_PROMPT, opts);
+  await runFinalPassLoop(messages, COMPLIANCE_TOOLS, COMPLIANCE_SYSTEM_PROMPT, opts, COMPLIANCE_MODEL);
 }
 
 // ─── Sub-pass 2: contradiction detection ─────────────────────────────────────
@@ -113,10 +133,49 @@ async function runContradictionCheck(
   const articlesText = articles
     .map(a => `Article: ${a.path}\n---\n${a.content}\n---`)
     .join('\n\n');
+  const decisionLogSection = serializeDecisionLog(opts.decisionLog);
+  const content = decisionLogSection ? `${decisionLogSection}\n\n${articlesText}` : articlesText;
   const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: articlesText },
+    { role: 'user', content },
   ];
   await runFinalPassLoop(messages, CONTRADICTION_TOOLS, CONTRADICTION_SYSTEM_PROMPT, opts);
+}
+
+// ─── Sub-pass 3: trajectory revision ─────────────────────────────────────────
+
+async function runSubPass3(opts: FinalPassOptions): Promise<void> {
+  opts.onProgress('trajectory revision');
+
+  const articles: Array<{ path: string; content: string }> = [];
+  for (const [path] of opts.state.runArticles) {
+    const content = await readArticle(path, opts);
+    if (content !== null) articles.push({ path, content });
+  }
+  if (articles.length === 0) return;
+
+  const transcriptText = opts.transcript
+    .map((turn, idx) => `--- Turn ${idx} ---\n${turn}`)
+    .join('\n\n');
+
+  const articlesText = articles
+    .map(a => `Article: ${a.path}\n---\n${a.content}\n---`)
+    .join('\n\n');
+
+  const decisionLogSection = serializeDecisionLog(opts.decisionLog);
+  const preamble = [
+    `Source note: ${opts.sourceNotePath}`,
+    decisionLogSection || null,
+    `## Full transcript\n\n${transcriptText}`,
+    `## Current articles\n\n${articlesText}`,
+  ].filter(Boolean).join('\n\n');
+
+  const messages: Anthropic.MessageParam[] = [
+    { role: 'user', content: preamble },
+  ];
+
+  await runFinalPassLoop(messages, REVISION_TOOLS, TRAJECTORY_REVISION_SYSTEM_PROMPT, opts, undefined, true).catch(() => {
+    opts.state.errorCount++;
+  });
 }
 
 // ─── Shared agentic loop ──────────────────────────────────────────────────────
@@ -126,12 +185,14 @@ async function runFinalPassLoop(
   tools: Anthropic.Tool[],
   systemPrompt: string,
   opts: FinalPassOptions,
+  modelOverride?: string,
+  isTrajectoryPass = false,
 ): Promise<void> {
-  const ctx = makeFinalPassCtx(opts);
+  const ctx = makeFinalPassCtx(opts, isTrajectoryPass);
 
   while (true) {
     const response = await callFinalPassApi(
-      opts.client, opts.model, messages, tools, systemPrompt, opts.config,
+      opts.client, modelOverride ?? opts.model, messages, tools, systemPrompt, opts.config,
     );
     messages.push({ role: 'assistant', content: response.content });
 
@@ -159,7 +220,7 @@ async function runFinalPassLoop(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makeFinalPassCtx(opts: FinalPassOptions): ToolContext {
+function makeFinalPassCtx(opts: FinalPassOptions, isTrajectoryPass = false): ToolContext {
   return {
     vault: opts.vault,
     transcript: [],      // unused — final pass tools don't call read_turns
@@ -168,6 +229,7 @@ function makeFinalPassCtx(opts: FinalPassOptions): ToolContext {
     config: opts.config,
     vaultScanner: opts.vaultScanner,
     magmaRoot: opts.magmaRoot,
+    isTrajectoryPass,
   };
 }
 
@@ -207,6 +269,3 @@ async function readArticle(path: string, opts: FinalPassOptions): Promise<string
   return opts.vault.read(file);
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}

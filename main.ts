@@ -6,6 +6,7 @@ import { VaultScanner } from './src/vault-scanner';
 import { runExtractionLoop } from './src/extraction/loop';
 import { run3PassFallback } from './src/extraction/fallback';
 import { runFinalPass } from './src/extraction/final-pass';
+import { writeArticleDecisionLogs } from './src/extraction/decision-log-writer';
 import { CompatNoticeModal } from './src/ui/compat-notice-modal';
 import { CompletionModal } from './src/ui/completion-modal';
 import { LengthComplianceModal } from './src/ui/length-compliance-modal';
@@ -57,7 +58,7 @@ const MAGMA_WIKI_ROOT = '.magma/wiki';
 type StatusBarState =
   | { kind: 'idle' }
   | { kind: 'extracting'; turn: number; total: number; etaMs?: number }
-  | { kind: 'final_pass'; label: 'compliance' | 'consistency' }
+  | { kind: 'final_pass'; label: 'compliance' | 'consistency' | 'trajectory' }
   | { kind: 'cancelled' }
   | { kind: 'done'; warnings: boolean }
   | { kind: 'error' };
@@ -277,7 +278,10 @@ export default class EruptPlugin extends Plugin {
         this.statusWordEl.addClass('erupt-magic-label');
         this.statusCancelEl.style.display = 'none';
         this.statusBarItem.addClass('erupt-status-active');
-        const fraction = state.label === 'compliance' ? 0.85 : 0.92;
+        const fraction =
+          state.label === 'compliance' ? 0.85 :
+          state.label === 'consistency' ? 0.92 :
+          0.97;
         const bar = progressBar(fraction);
         this.statusDetailEl.setText(`  ${bar}  ${state.label}`);
         this.announceAria(`Erupt: final pass — ${state.label}`, true);
@@ -552,14 +556,28 @@ export default class EruptPlugin extends Plugin {
         vaultScanner: this.vaultScanner,
         magmaRoot: MAGMA_WIKI_ROOT,
         sourceNotePath: activeFile.path,
+        transcript,
+        decisionLog: this.runState.decisionLog,
         onProgress: (label: string) => {
-          const fpLabel = label.includes('compliance') ? 'compliance' : 'consistency';
+          const fpLabel = label.includes('compliance')
+            ? 'compliance'
+            : label.includes('trajectory')
+              ? 'trajectory'
+              : 'consistency';
           this.updateStatusBar({ kind: 'final_pass', label: fpLabel });
         },
       });
 
       const hasWarnings = this.runState.errorCount > 0;
       this.updateStatusBar({ kind: 'done', warnings: hasWarnings });
+
+      await emitValidatorSummary(this.app.vault, MAGMA_WIKI_ROOT, this.runState);
+
+      try {
+        await writeArticleDecisionLogs(this.app.vault, this.runState, MAGMA_WIKI_ROOT);
+      } catch (err) {
+        console.error('[Erupt] writeArticleDecisionLogs failed (non-fatal):', err);
+      }
 
       await new CompletionModal(this.app, {
         state: this.runState,
@@ -1030,6 +1048,61 @@ function parseJwtEmail(token: string): string | undefined {
     return payload.email as string | undefined;
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * Emit a Run 7 validator-rejection summary to extraction_log.jsonl.
+ * Used to measure the <20%-rejection-rate ship gate.
+ */
+async function emitValidatorSummary(
+  vault: Vault,
+  magmaRoot: string,
+  state: ExtractionRunState,
+): Promise<void> {
+  const byValidator: Record<string, number> = {};
+  for (const r of state.validatorRejections) {
+    byValidator[r.validator] = (byValidator[r.validator] ?? 0) + 1;
+  }
+  const total = state.validatorRejections.length;
+  const attempts = state.writeAttempts;
+  const rate = attempts === 0 ? 0 : total / attempts;
+
+  const logPath = magmaRoot.replace(/\/wiki$/, '') + '/extraction_log.jsonl';
+  const lines: string[] = [];
+
+  // Per-rejection lines for diagnostic detail
+  for (const r of state.validatorRejections) {
+    lines.push(JSON.stringify({
+      event: 'validator_rejection',
+      validator: r.validator,
+      path: r.path,
+      reason: r.reason,
+      isTrajectoryPass: r.isTrajectoryPass,
+      ts: r.ts,
+    }));
+  }
+
+  // Summary line
+  lines.push(JSON.stringify({
+    event: 'validator_summary',
+    writeAttempts: attempts,
+    rejections: total,
+    rate: Math.round(rate * 1000) / 1000,
+    byValidator,
+    ts: Date.now(),
+  }));
+
+  const blob = lines.join('\n') + '\n';
+  const file = vault.getFileByPath(logPath);
+  if (file) {
+    await vault.modify(file, (await vault.read(file)) + blob);
+  } else if (await vault.adapter.exists(logPath)) {
+    const existing = await vault.adapter.read(logPath);
+    await vault.adapter.write(logPath, existing + blob);
+  } else {
+    await ensureDir(vault, logPath);
+    await vault.create(logPath, blob);
   }
 }
 

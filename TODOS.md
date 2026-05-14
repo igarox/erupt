@@ -754,3 +754,81 @@ new Notice("Your session expired — reconnect your Slipstream account for futur
 **Depends on:** v1 ship.
 
 **Effort:** S (human: ~1 day / CC: ~2 hours for diagnostic reports).
+
+---
+
+## [P2 — ERUPT] Decision Log Entry Cap for Dense Sessions
+
+**What:** When a session produces more Active/Open decisions than a configurable threshold, auto-retire the entry least recently touched (lowest resolutionTurn, fallback to createdTurn) to prevent unbounded context growth in long-session extractions.
+
+**Why:** The Active/Open entry cap was explicitly removed from Run 8 scope (eng review D10b — "removed as premature; real data needed to set threshold"). Run 8 and subsequent sessions will reveal whether the agent self-manages retirement correctly or whether unbounded growth is observed in practice.
+
+**How to apply:** In `add_or_update_decision` handler, after adding/updating: if `state.decisionLog.active.length > CAP` or `open.length > CAP`, call `getAutoRetireCandidate()` (sort by `resolutionTurn ?? createdTurn`, ascending) and move to Retired. Add `DECISION_LOG_CAP` constant to `ExtractionConfig`.
+
+**Pros:** Prevents unbounded context growth in 30+ turn sessions; auto-retire by recency is semantically correct (retire cold threads, not foundational decisions).
+
+**Cons:** Adds cap enforcement code + getAutoRetireCandidate helper + unit tests; premature without real session data.
+
+**Context:** Removed from Run 8 scope in /plan-eng-review 2026-05-13. Cap threshold should be informed by Run 8+ session data on typical Active/Open entry counts per session.
+
+**Depends on:** Decision log core mechanic (Run 8 validation), real session data showing entry count patterns.
+
+**Effort:** XS (human: ~30min / CC: ~5min once threshold is known).
+
+---
+
+## [P2 — ERUPT] Cross-Turn Article Attachment for Decision Logs
+
+**What:** `writeArticleDecisionLogs()` currently attaches decisions only to articles first written in the same turn (`runArticleTurnMap`). Decisions that affect articles from prior turns (e.g., a turn-5 retire-decision on a turn-2 article) don't get attached to the affected article's decision log.
+
+**Why:** Identified in /plan-eng-review 2026-05-13 D2 user note: "couldn't things cascade outside of the articles edited at that turn?" Creation-turn attachment is a correct approximation for Run 8 but loses cross-turn causality.
+
+**How to apply:** Track an edit history map (`runArticleEditsByTurn: Map<string, number[]>`) that records all turns in which an article was written/modified (not just the first). In `writeArticleDecisionLogs()`, use the union of createdTurn articles and editedTurn articles for each decision.
+
+**Pros:** Full locality-of-reference: every article log includes all decisions that touched it, regardless of when. Enables the "session intelligence layer" vision in the CEO plan.
+
+**Cons:** Requires edit history tracking (more state in ExtractionRunState); complex many-to-many article↔decision mapping; needs real decision log data to validate usefulness.
+
+**Context:** Deferred from Run 8 scope. Revisit post-Run 8 once we can observe real decision log data and see how often cross-turn attachment would be triggered.
+
+**Depends on:** Decision log core mechanic (Run 8 validation), real session data.
+
+**Effort:** S (human: ~2h / CC: ~15min).
+
+---
+
+## [P2 — ERUPT] Compress Trajectory Pass — Per-Turn Intent Context Hypothesis
+
+**What:** The trajectory revision pass currently exists as a compensatory mechanism: because the main loop lacked persistent trajectory context, articles accumulated semantic drift and needed post-run correction. The decision log gives the main loop that context per-turn. Test whether the trajectory pass can be compressed to a lightweight structural confirmation pass (merge detection, orphan check, de-duplication) rather than a heavy semantic rewrite pass.
+
+**Why:** If the decision log's Active/Retired/Open entries are providing sufficient trajectory understanding during the main loop, the main loop should produce nearly-final articles and the trajectory pass should stop doing major semantic correction. Compressing it reduces total run cost and latency without sacrificing quality.
+
+**How to apply:** After Run 8, audit the trajectory pass output: how much rewriting did it actually do vs. the main loop's articles? If corrections are primarily structural (merge, de-dupe, orphan cleanup) rather than semantic (intent correction, scope adjustment), the trajectory pass mandate narrows. Redesign it as a structural consolidation pass only. If it's still doing heavy semantic correction, investigate why the decision log isn't preventing the drift and fix that instead.
+
+**Validation criteria:** Trajectory pass makes zero or near-zero semantic corrections in Run 9 (with decision log active). Structural corrections (merges, orphan cleanup) remain expected.
+
+**Context:** Raised post /plan-eng-review 2026-05-13. The trajectory pass was designed for a context-poor main loop. The decision log fixes context poverty at the root. A post-run trajectory pass that does semantic correction is architectural debt if the decision log is working.
+
+**Depends on:** Decision log core mechanic (Run 8 validation).
+
+**Effort:** S (human: ~1h audit / CC: ~20min refactor once hypothesis confirmed).
+
+---
+
+## [P3] Status Bar Decision Count During Extraction
+
+**What:** Show active + open decision count in the Obsidian status bar during extraction: `"Extracting... (turn 3/8 — 2 active, 1 open)"`.
+
+**Why:** Makes the decision log visible to the user. Provides live feedback that the agent is tracking something meaningful, not just processing text. Trust-building without cluttering the UI.
+
+**How to apply:** In `main.ts`, thread `state.decisionLog` into the `onProgress` callback. In the status bar update: append ` — ${active} active, ${open} open` when either count > 0.
+
+**Pros:** Surfaces the scratchpad to the user; builds confidence in the feature; ~30 minutes of implementation once the decision log is live.
+
+**Cons:** Minimal — adds one string concatenation to the status bar update path.
+
+**Context:** Cherry-picked from /plan-ceo-review session 2026-05-13 as a delight opportunity. Decision log core mechanic must ship and pass Run 8 first.
+
+**Depends on:** Decision log core mechanic (Run 8 validation).
+
+**Effort:** S (human: 1h / CC: ~10min).

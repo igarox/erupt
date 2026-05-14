@@ -7,6 +7,7 @@ export class MagmaExplorerView extends ItemView {
   private magmaRowMap = new Map<string, HTMLElement>();
   private lockBannerEl: HTMLElement | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private showDecisionLogs = false;
 
   constructor(leaf: WorkspaceLeaf, private plugin: EruptPlugin) {
     super(leaf);
@@ -47,7 +48,18 @@ export class MagmaExplorerView extends ItemView {
     root.addClass('magma-explorer-container');
     this.magmaRowMap.clear();
 
-    root.createEl('div', { cls: 'magma-explorer-header', text: '🌋 Magma' });
+    const headerEl = root.createEl('div', { cls: 'magma-explorer-header' });
+    headerEl.createEl('span', { text: '🌋 Magma' });
+    const toggleEl = headerEl.createEl('button', {
+      cls: 'magma-decision-log-toggle',
+      title: 'Toggle decision logs',
+      text: '📋',
+    });
+    toggleEl.style.opacity = this.showDecisionLogs ? '1' : '0.35';
+    toggleEl.addEventListener('click', () => {
+      this.showDecisionLogs = !this.showDecisionLogs;
+      this.render();
+    });
 
     this.lockBannerEl = root.createEl('div', { cls: 'magma-lock-banner' });
     this.updateLockBanner();
@@ -74,9 +86,12 @@ export class MagmaExplorerView extends ItemView {
     try {
       const { files, folders } = await this.app.vault.adapter.list(folderPath);
       const name = (p: string) => p.split('/').pop() ?? p;
-      const sortedFolders = [...folders].sort((a, b) => name(a).localeCompare(name(b)));
+      const sortedFolders = [...folders]
+        .filter(f => this.showDecisionLogs || name(f) !== '_decisions')
+        .sort((a, b) => name(a).localeCompare(name(b)));
       const sortedFiles = [...files]
         .filter(f => f.endsWith('.md'))
+        .filter(f => this.showDecisionLogs || !name(f).endsWith('.decisions.md'))
         .sort((a, b) => name(a).localeCompare(name(b)));
 
       for (const sub of sortedFolders) {

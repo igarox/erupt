@@ -1,3 +1,17 @@
+export interface Decision {
+  id: string;
+  text: string;
+  status: 'open' | 'active' | 'retired';
+  createdTurn: number;
+  resolutionTurn?: number;
+}
+
+export interface DecisionLog {
+  active: Decision[];
+  retired: Decision[];
+  open: Decision[];
+}
+
 export interface ClarifyingQuestion {
   question: string;
   context: string;
@@ -29,22 +43,45 @@ export const DEFAULT_EXTRACTION_CONFIG: ExtractionConfig = {
   RETRY_429_BASE_MS: 2_000,
 };
 
+export interface ValidatorRejection {
+  validator: string;
+  path: string;
+  reason: string;
+  isTrajectoryPass: boolean;
+  ts: number;
+}
+
 export interface ExtractionRunState {
   runArticles: Map<string, number>;
+  /** Articles written by the main per-turn loop. Trajectory revision pass
+   *  cannot delete or shrink these. Populated only during the main loop. */
+  perTurnArticles: Set<string>;
   lastGoodContent: Map<string, string>;
   currentTurnWritten: Set<string>;
   clarifyingQuestions: ClarifyingQuestion[];
   errorCount: number;
+  /** Total successful write_magma calls — denominator for rejection rate. */
+  writeAttempts: number;
+  /** Each validator rejection logged for post-run analysis. */
+  validatorRejections: ValidatorRejection[];
   currentController: AbortController | null;
+  decisionLog: DecisionLog;
+  /** article path → turn number it was first written (main loop only). */
+  runArticleTurnMap: Map<string, number>;
 }
 
 export function createRunState(): ExtractionRunState {
   return {
     runArticles: new Map(),
+    perTurnArticles: new Set(),
     lastGoodContent: new Map(),
     currentTurnWritten: new Set(),
     clarifyingQuestions: [],
     errorCount: 0,
+    writeAttempts: 0,
+    validatorRejections: [],
     currentController: null,
+    decisionLog: { active: [], retired: [], open: [] },
+    runArticleTurnMap: new Map(),
   };
 }
