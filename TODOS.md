@@ -797,21 +797,31 @@ new Notice("Your session expired — reconnect your Slipstream account for futur
 
 ---
 
-## [P2 — ERUPT] Compress Trajectory Pass — Per-Turn Intent Context Hypothesis
+## [P2 — ERUPT] Trajectory as Per-Turn Signal, Not Post-Run Pass
 
-**What:** The trajectory revision pass currently exists as a compensatory mechanism: because the main loop lacked persistent trajectory context, articles accumulated semantic drift and needed post-run correction. The decision log gives the main loop that context per-turn. Test whether the trajectory pass can be compressed to a lightweight structural confirmation pass (merge detection, orphan check, de-duplication) rather than a heavy semantic rewrite pass.
+**Core architectural reframe:** The "trajectory pass" is mis-named and mis-positioned. The whole point of *knowing trajectory* is to understand intent — and intent is immediately relevant *during* the main loop, not after it. Trajectory understanding is a low-frequency signal (changes slowly across the conversation arc — a few turns at a time, not every turn), which means it lags naturally and can be injected into the main loop without sync problems. The decision log is already doing this work: Active/Open/Retired entries are exactly the kind of per-turn trajectory state that lets the main pass write nearly-final articles instead of drafts that need polishing.
 
-**Why:** If the decision log's Active/Retired/Open entries are providing sufficient trajectory understanding during the main loop, the main loop should produce nearly-final articles and the trajectory pass should stop doing major semantic correction. Compressing it reduces total run cost and latency without sacrificing quality.
+**The hypothesis:** If trajectory is carried per-turn alongside the decision log, the main pass produces nearly-final articles. The post-run trajectory pass — which currently does heavy semantic rewriting (merge under-extracted Tier 3, downgrade misclassified confidence, fold over-extracted standalones into Future Directions) — exists only because the main loop was previously context-poor. Compressing the workflow: get it right on the main pass, hold trajectories for finishing passes as **reference** for understanding overall structure, not as authority to rewrite.
 
-**How to apply:** After Run 8, audit the trajectory pass output: how much rewriting did it actually do vs. the main loop's articles? If corrections are primarily structural (merge, de-dupe, orphan cleanup) rather than semantic (intent correction, scope adjustment), the trajectory pass mandate narrows. Redesign it as a structural consolidation pass only. If it's still doing heavy semantic correction, investigate why the decision log isn't preventing the drift and fix that instead.
+**Run 8 evidence (validates the hypothesis):** Run 8 produced zero retired decisions yet correctly classified blade morphing as a Future Direction inside the parent EMPR article — for the first time in 8 runs. The agent prevented the misclassification rather than correcting it. The Active decision `empr-primary-invention: all subordinate` shaped per-turn judgment from turn 0 onward. This is direct evidence that per-turn trajectory carry **is** sufficient to produce nearly-final articles. The trajectory revision pass did very little semantic work; what it did was mostly structural.
 
-**Validation criteria:** Trajectory pass makes zero or near-zero semantic corrections in Run 9 (with decision log active). Structural corrections (merges, orphan cleanup) remain expected.
+**Caveats:**
+- **Lookahead is the one real limitation.** If turn 6 introduces something that retroactively recontextualizes what was written in turn 2, the main loop couldn't have known. That's the legitimate residual job for a post-run pass — but it should be narrow (catch late-breaking recontextualizations) rather than rewriting articles wholesale.
+- **Single dominant Active decision can over-suppress legitimate splits** (Run 8 produced 2 articles when 3 might have been better — Yaw Control was arguably its own article). The per-turn signal needs to support multi-track conversations without collapsing them. Tune the prompt to discourage over-broad "all subordinate" Active decisions.
+- **Less-focused transcripts not yet tested.** EMPR is monomaniacally about EMPR. A conversation with 2–3 genuinely separate topics will stress-test whether per-turn trajectory carry handles parallel arcs correctly.
 
-**Context:** Raised post /plan-eng-review 2026-05-13. The trajectory pass was designed for a context-poor main loop. The decision log fixes context poverty at the root. A post-run trajectory pass that does semantic correction is architectural debt if the decision log is working.
+**How to apply:**
+1. **Audit Run 8 trajectory pass output** — measure semantic correction (intent rewriting, confidence downgrade, Tier reclass) vs. structural correction (merge dupes, orphan cleanup, cross-article wikilink integrity). Expectation: mostly structural.
+2. **If audit confirms**, narrow `TRAJECTORY_REVISION_SYSTEM_PROMPT` to structural-only: detect duplicate/overlapping articles, find orphans (articles with no incoming wikilinks), enforce hatnote/summary consistency between parent/child. Remove the merge/downgrade/Tier-3-demotion mandate from the trajectory pass entirely — that work now happens in the main loop via the decision log.
+3. **If audit shows residual semantic work**, find out why the decision log didn't prevent it during the main loop, and strengthen the decision log usage (better prompt, more explicit examples) rather than keeping the trajectory pass as a fallback.
 
-**Depends on:** Decision log core mechanic (Run 8 validation).
+**Validation criteria:** On Run 9 (less-focused multi-topic transcript), trajectory pass makes zero semantic corrections. Structural corrections (merges, orphan cleanup, hatnote sync) remain expected. Total cost drops below the Run 8 $0.52 baseline by trimming trajectory pass scope.
 
-**Effort:** S (human: ~1h audit / CC: ~20min refactor once hypothesis confirmed).
+**Context:** Raised in conversation post /plan-eng-review 2026-05-13. Direct framing from the user: "isn't the whole point of knowing trajectory to help with understanding intent? if so, that is immediately relevant while going through the turns (simultaneous to main pass; it is lower frequency info that lags so there's no sync problem) to write accurate, consolidated articles to begin with and the trajectories can be held for the finishing passes for reference in understanding the structure and thus the point of everything. im wondering if we can compress the entire workflow if we just get the article nearly right on main pass instead of relying on polishing passes." Run 8 produced the first evidence that this framing is correct — the decision log delivered nearly-final articles preventatively, and the trajectory pass had very little semantic work to do.
+
+**Depends on:** Decision log core mechanic (Run 8 — validated). Multi-topic transcript validation (pending).
+
+**Effort:** S (human: ~1h audit + ~30min prompt rewrite / CC: ~30min refactor).
 
 ---
 
