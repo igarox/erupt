@@ -8,6 +8,122 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 
 ---
 
+## [SPRINT — 2026-05-19] Quality Sprint + Vault Generation (gates Magazine work)
+
+This fortnight is Erupt's last quality+model push before closed beta. The closed beta landing — handing copies to non-founder users — is the gate that triggers Magazine code work (see workspace `TODOS.md` "Magazine — Gate"). Order matters: business-model decision → quality runs → quality gate → vault generation → beta cohort.
+
+**Sprint workstreams (this fortnight):**
+
+1. **EMPR quality runs (continuation of Run 8).** More runs with founder-recorded notes per run, reviewed and folded back into prompt/architecture. Focus: accuracy and consistency. Notes captured in `erupt/decision-log-scratchpad.md` (or equivalent) so prompt-change rationale survives the next run cycle.
+2. **Business model decision** — see "[SPRINT — DECISION] Free/Local/Cloud → BYOK reframe" below.
+3. **Cost reduction work.** Run 4 surfaced $0.62/run as a cost blocker. Tactical levers: prompt compression, model routing (Haiku 4.5 vs Sonnet boost), reducing turn count, caching repeated context across runs in a session.
+4. **Quality gate** — see "[SPRINT — GATE] Quality threshold before real vault generation" below.
+5. **Vault generation against Magazine-context chats** (post-gate). The first hard dogfood + the unlock for Magazine work.
+6. **Some UI polish on breaks** — Session Picker keyboard nav (P1), Status Bar aria-live (P1), other XS items in this file.
+
+**Out of scope this fortnight:** Slipstream API proxy + account auth. See "[SPRINT — DECISION] Proxy this fortnight vs v1.5" below — leaning v1.5 (ship Local-only v1, add Free + Cloud later).
+
+---
+
+## [SPRINT — DECISION] Free/Local/Cloud → BYOK + small monthly reframe
+
+**What:** Re-evaluate the three-tier plan structure. Two candidate models:
+
+1. **BYOK + small monthly fee.** User brings their own Anthropic/OpenAI key (and/or runs Ollama locally). Slipstream charges a small monthly fee ($3-5/mo) for the plugin itself, with no proxy. Slipstream account optional, used for entitlement only.
+2. **Pure usage-based.** Slipstream provides API access through the proxy, billed per-extraction or per-token to the user. No flat fee. Honest but creates billing anxiety.
+
+**Why this is on the table:** The current Free/Local/Cloud tiers require the Slipstream proxy + account auth + Stripe wiring before any non-Local user can use the plugin. That's two BLOCKER TODOs of infrastructure work between today and shipping. BYOK + small monthly bypasses the proxy entirely for v1, converts Slipstream's role from "API cost center" to "thin entitlement layer," and ships faster.
+
+**Why BYOK is probably right for Erupt specifically:**
+- Erupt's audience is Obsidian power users — the segment most likely to already have an Anthropic API key, an OpenAI key, or an Ollama setup. The onboarding friction BYOK creates is lower for this audience than for Bleeper's audience.
+- Bleeper-audience friction is higher (consumer-facing), so they should not share this model.
+- BYOK is what the strategy doc's Drift architecture pattern implies anyway — user-owned credentials, Slipstream as facilitator not custodian.
+
+**What needs deciding:**
+- BYOK + monthly OR pure usage-based OR keep current Free/Local/Cloud?
+- If BYOK: $3, $5, or no monthly fee at all (free with key)?
+- Does v1 still need any Slipstream account, or can entitlement be a one-time license key like Bleeper?
+
+**Decision deadline:** Before any further proxy/auth work or pricing-page copy is committed. Cascades into everything downstream (proxy decision, Stripe items, account auth items, distribution decision).
+
+**Depends on:** Founder decision. Consults: existing Free/Local/Cloud `[BLOCKER — ERUPT]` items.
+
+**Effort:** Decision XS; implementation impact varies by choice.
+
+---
+
+## [SPRINT — GATE] Quality threshold before real vault generation
+
+**What:** Erupt EMPR runs must clear a quality+cost bar before founder starts using Erupt to write into a real Magazine knowledge-base vault.
+
+**Why:** The vault is the substrate for Magazine code work (CC reads vault content as knowledge base, see workspace `TODOS.md` "Magazine — Gate"). If extraction is at 5.5/7 with $0.62/run cost when vault generation begins, the vault inherits noise faster than the founder can curate it, and Magazine work inherits that noise downstream. The vault is regenerable, but founder time spent triaging bad notes is not.
+
+**Gate condition (must both hold):**
+- **Quality:** EMPR runs reliably hit ≥6.5/7 across mixed transcript types — not one cherry-picked run.
+- **Cost:** Per-extraction cost is in a range that makes ongoing vault regeneration viable, not punitive. Threshold TBD by founder; tie to the business-model decision above (BYOK changes the calculus — cost falls on the user's own key, so threshold can be looser).
+
+**If quality is met but cost isn't:** BYOK pivot is the cost answer; proceed with vault generation under BYOK.
+
+**If quality isn't met:** No vault writing yet. More EMPR iteration, do not start the Magma vault for Magazine chats. The downstream Magazine-gate stays closed until this gate clears.
+
+**Decision point:** Mid-sprint checkpoint, evaluate honestly. The cost of forcing the gate is a polluted vault that has to be regenerated; the cost of holding it is one more sprint.
+
+**Depends on:** Continued EMPR runs.
+
+---
+
+## [SPRINT] Generate Magma vault from Magazine-context chats (post-quality-gate)
+
+**What:** Use Erupt to extract Magazine-architecture context from accumulated ChatGPT + Claude conversations into a real Magma vault. Goal: a queryable, structured knowledge base that CC can read against when Magazine engineering begins.
+
+**Why:** This is the hardest dogfood test of Erupt's core promise and the unlock for Magazine work. Magazine architecture (Ether pipeline, style library, data flows, layout engine) is currently locked in chat history — well-developed per founder, but unfilterable. Erupt converts immutable chats into a structured Magma vault. Vault is regenerable, so this isn't a one-shot — re-extract as Erupt improves.
+
+**Important — temporal structure preservation.** Magazine architecture chats have a timeline: later decisions supersede earlier speculation. The Decision Log Scratchpad architecture (Run 8) is directly relevant — extraction must preserve provenance (which chat, when) and supersession, not flatten the timeline into a directory of contradictory partial drafts. This is also the failure mode the founder will encounter first if extraction is naive.
+
+**Expected output:**
+- A Magma vault under `~/Obsidian/MagazineKnowledge/` (or equivalent) containing extracted articles on: Ether pipeline, style library, data architecture layers, layout system, cover generation, subscriber data flow, legal posture cross-references, etc.
+- Decision-log entries preserving chat → article provenance and supersession.
+- Founder reviews and curates as the vault forms; gaps and contradictions surface naturally.
+
+**Important caveat:** The vault, once built, will probably expose meaningful architectural gaps where chat-based ideation produced "feels decided" content that was never settled. Plan for it. Re-deciding those before Magazine CC builds against them is part of the unlock value, not a setback.
+
+**Depends on:** Quality gate above cleared. Business-model decision made.
+
+**Effort:** Ongoing during sprint. The vault is never "done"; first useful regeneration is the milestone.
+
+---
+
+## [SPRINT — DECISION] Proxy this fortnight vs v1.5 (defer to BYOK pivot)
+
+**What:** Decide explicitly whether the Slipstream API proxy + account auth lands in v1 or slides to v1.5.
+
+**Recommendation (leaning):** v1.5. Ship Erupt v1 as Local-only (Ollama) + BYOK (user's own Anthropic key) — no proxy needed. Add Free + Cloud tiers in v1.5 once the proxy + auth infrastructure is built (which also serves Bleeper paid tier and Magazine subscriber accounts).
+
+**Why:** Both BLOCKER items (`Build Slipstream API Proxy Backend`, `Slipstream Account Auth System`) are L-effort. Doing them this fortnight blocks Erupt closed beta indefinitely. Local + BYOK ships the v1 product to the closed beta cohort that gates Magazine work; the proxy can be built as a parallel workstream and unlock Free/Cloud tiers later.
+
+**Open question:** If the BYOK + small monthly decision lands, does Free tier exist at all in v1.5, or is the only ladder BYOK ($X/mo) → Cloud (subscription with proxy)? Possibly Free becomes a 3-job trial via Slipstream-provided key for evaluation, not a sustained tier.
+
+**Decision deadline:** End of this fortnight, before v1 plugin distribution begins.
+
+**Depends on:** Business model decision above.
+
+---
+
+## [SPRINT] Erupt closed beta = Magazine code gate
+
+**What:** Erupt closed beta = handing copies of the plugin to non-founder users for real use. The moment that happens is the Magazine-code gate (see workspace `TODOS.md` "Magazine — Gate").
+
+**Why "to other people":** "Good enough for me" is a personal bar. "Good enough to hand to people I'd put my name behind giving it to" is defendable-to-peers. Defendable-to-peers + a working Magma vault from Magazine chats + EMPR ≥6.5/7 = the conditions that unblock Magazine engineering.
+
+**Beta cohort scoping:**
+- Identify 5-10 Obsidian power users who use AI chats heavily (the target audience archetype).
+- Hand out copies with the BYOK + Local plan path (no proxy needed — see proxy decision above).
+- Capture feedback that informs the *next* vault regeneration. The vault Magazine eventually builds against is the post-feedback vault, not this one.
+
+**Depends on:** Quality gate cleared. Vault generation underway. Business model + proxy decisions landed.
+
+---
+
 ## [BLOCKER — ERUPT] Build Slipstream API Proxy Backend
 
 **What:** `api.slipstream.now/proxy/claude` — required for both Free tier (server-side job counter enforcement) and Cloud plan (proxy extraction). Plugin routes by plan tier: Free / Cloud → proxy (JWT bearer auth), Local → Ollama at `http://localhost:11434`.
@@ -799,30 +915,30 @@ new Notice("Your session expired — reconnect your Slipstream account for futur
 
 ## [P2 — ERUPT] Trajectory as Per-Turn Signal, Not Post-Run Pass
 
-**Core architectural reframe:** The "trajectory pass" is mis-named and mis-positioned. The whole point of *knowing trajectory* is to understand intent — and intent is immediately relevant *during* the main loop, not after it. Trajectory understanding is a low-frequency signal (changes slowly across the conversation arc — a few turns at a time, not every turn), which means it lags naturally and can be injected into the main loop without sync problems. The decision log is already doing this work: Active/Open/Retired entries are exactly the kind of per-turn trajectory state that lets the main pass write nearly-final articles instead of drafts that need polishing.
+**Core architectural reframe:** Trajectory and the decision log are two distinct per-turn signals with different frequencies:
+- **Decision log** — high-frequency boundary info: what's committed, what's open, what's retired. Changes every few turns.
+- **Trajectory** — low-frequency color info: the arc and phase of the conversation ("we started debugging, pivoted to design, now planning"). Changes slowly across the session. Lags naturally, so it can be injected per-turn without sync problems.
 
-**The hypothesis:** If trajectory is carried per-turn alongside the decision log, the main pass produces nearly-final articles. The post-run trajectory pass — which currently does heavy semantic rewriting (merge under-extracted Tier 3, downgrade misclassified confidence, fold over-extracted standalones into Future Directions) — exists only because the main loop was previously context-poor. Compressing the workflow: get it right on the main pass, hold trajectories for finishing passes as **reference** for understanding overall structure, not as authority to rewrite.
+Both belong in the main loop, not in a post-run pass. The post-run pass existed only because the main loop was context-poor. With per-turn trajectory + decision log, the main pass should produce nearly-final articles and the post-run pass becomes a structural consistency check only.
 
-**Run 8 evidence (validates the hypothesis):** Run 8 produced zero retired decisions yet correctly classified blade morphing as a Future Direction inside the parent EMPR article — for the first time in 8 runs. The agent prevented the misclassification rather than correcting it. The Active decision `empr-primary-invention: all subordinate` shaped per-turn judgment from turn 0 onward. This is direct evidence that per-turn trajectory carry **is** sufficient to produce nearly-final articles. The trajectory revision pass did very little semantic work; what it did was mostly structural.
+**Open question:** Can the decision log alone synthesize trajectory, or does trajectory need its own dedicated tool? Run 8 (EMPR — a monomaniacal single-topic transcript) suggests the decision log alone may be sufficient: `empr-primary-invention: all subordinate` effectively *was* the trajectory. But EMPR is the easiest possible test. A multi-topic transcript with 2–3 parallel arcs will reveal whether Active/Open/Retired entries can carry parallel trajectories without collapsing one arc under a dominant Active decision.
 
-**No lookahead.** The main loop already has the tools to handle retroactive updates: when turn 6 introduces something that recontextualizes turn 2, the agent at turn 6 has full visibility into prior turns AND the decision log AND can call `read_magma` → `write_magma` to update earlier articles. There is no need for a post-run pass to "catch what the main loop couldn't see" — the main loop CAN see everything by the time the recontextualization happens. Eliminating the lookahead concern means the post-run pass either becomes purely structural/mechanical (duplicate detection, orphan cleanup, hatnote consistency — checks over the full article set, not rewrites) or is eliminated entirely. No "narrow correction" carve-out.
+**Run 8 evidence:** Zero retired decisions, blade morphing correctly classified as Future Directions for the first time in 8 runs — preventatively, not correctively. The post-run structural pass had no semantic work to do.
 
-**Caveats:**
-- **Single dominant Active decision can over-suppress legitimate splits** (Run 8 produced 2 articles when 3 might have been better — Yaw Control was arguably its own article). The per-turn signal needs to support multi-track conversations without collapsing them. Tune the prompt to discourage over-broad "all subordinate" Active decisions.
-- **Less-focused transcripts not yet tested.** EMPR is monomaniacally about EMPR. A conversation with 2–3 genuinely separate topics will stress-test whether per-turn trajectory carry handles parallel arcs correctly.
+**Progress so far (2026-05-14):**
+- ✅ Post-run pass stripped to structural-only (`TRAJECTORY_REVISION_SYSTEM_PROMPT` rewritten: orphan repair, hatnote consistency, duplicate detection only — all semantic mandates deleted). Decision log tools removed from the structural pass tool set.
+- ✅ Post-run pass progress label renamed to `'structural check'`.
+- ✅ **Run 9 baseline** — Rail transcript (21 pairs, ~90KB, multi-arc). 10 articles produced, no arc collapse, decision log remained article-scoped throughout. Cost $2.43 (4× longer transcript than Run 8). 2026-05-15.
+- 🔲 **If Run 9 reveals arc collapse** — *(not triggered — Run 9 was clean)*
+- ✅ **If Run 9 is clean** — decision log alone is sufficient; trajectory tool is unnecessary. Confirmed 2026-05-15: 11 Active decisions across 10 articles, none session-wide scope, zero arc collapse.
 
-**How to apply:**
-1. **Audit Run 8 trajectory pass output** — measure semantic correction (intent rewriting, confidence downgrade, Tier reclass) vs. structural correction (merge dupes, orphan cleanup, cross-article wikilink integrity). Expectation: mostly structural.
-2. **If audit confirms**, replace the current `TRAJECTORY_REVISION_SYSTEM_PROMPT` with a purely structural pass: detect duplicate/overlapping articles, find orphans (articles with no incoming wikilinks), enforce hatnote/summary consistency between parent/child. All semantic mandates — merge under-extracted, downgrade misclassified, demote Tier-3 surfaces — are deleted. That work belongs in the main loop and only in the main loop, via the decision log. If structural-only proves too thin to justify its cost, eliminate the pass entirely.
-3. **If audit shows residual semantic work**, find out why the decision log didn't prevent it during the main loop, and strengthen the decision log usage (better prompt, more explicit examples) rather than keeping the trajectory pass as a semantic fallback.
+**Known risk:** Single dominant Active decision can over-suppress legitimate splits. Tune the prompt to discourage over-broad "all subordinate" framing in Active decisions.
 
-**Validation criteria:** On Run 9 (less-focused multi-topic transcript), the post-run pass makes zero semantic corrections — only structural checks. Total cost drops below the Run 8 $0.52 baseline by trimming the pass scope or eliminating it.
+**Validation criteria:** Run 9 cost below Run 8's $0.52 baseline; post-run structural pass makes zero semantic corrections; parallel arcs in the rail transcript each get their own articles without arc collapse.
 
-**Context:** Raised in conversation post /plan-eng-review 2026-05-13. Direct framing from the user: "isn't the whole point of knowing trajectory to help with understanding intent? if so, that is immediately relevant while going through the turns (simultaneous to main pass; it is lower frequency info that lags so there's no sync problem) to write accurate, consolidated articles to begin with and the trajectories can be held for the finishing passes for reference in understanding the structure and thus the point of everything. im wondering if we can compress the entire workflow if we just get the article nearly right on main pass instead of relying on polishing passes." Run 8 produced the first evidence that this framing is correct — the decision log delivered nearly-final articles preventatively, and the trajectory pass had very little semantic work to do.
+**Depends on:** Decision log core mechanic (Run 8 — validated).
 
-**Depends on:** Decision log core mechanic (Run 8 — validated). Multi-topic transcript validation (pending).
-
-**Effort:** S (human: ~1h audit + ~30min prompt rewrite / CC: ~30min refactor).
+**Effort:** Run 9 observation: XS. Trajectory tool if needed: S (CC: ~1h).
 
 ---
 
