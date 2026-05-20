@@ -40,6 +40,22 @@ These form a temperature gradient from surface-bright to underground-dark. Consi
 
 ---
 
+## Spectral Treatment — Erupt
+
+> Full spec and live demos: `brand-demos/spectral-reference.html` at workspace root.
+
+**Erupt's slice:** Erupt's accent is ember orange (`#E85D26`) — warm end of the geological family, above Lava and Magma in temperature. The spectral treatment uses `--sp-4` (amber) → `--sp-5` (orange). Two stops only — micro-to-warm register.
+
+**Erupt constraint:** Erupt is an Obsidian plugin — it does not own its canvas. The spectral effect is **not used in plugin UI** (settings panel, modals, status bar). The spectral is restricted to:
+- The icon mark (if animated in a future Obsidian tile context)
+- Any external marketing surface (slipstream.now/erupt landing page)
+
+**On marketing surfaces:** Use the warm diffraction mode (sp-4 → sp-5), short trail (60–80px max). Consistent with the geological family warm register. The ember orange accent is the primary product signal; spectral only fires on brand hero moments.
+
+**Color mode:** WARM, 2-stop micro-variant (`--sp-4` → `--sp-5` only). The geological family reads warmer the deeper underground — Erupt is above-surface, so its spectral is modest and fleeting compared to Lava/Magma's potential treatments.
+
+---
+
 ## Color — Erupt
 
 - **Approach:** Restrained — one accent over Obsidian's native token layer
