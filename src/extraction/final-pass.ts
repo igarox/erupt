@@ -39,7 +39,7 @@ const CONTRADICTION_TOOLS = MAIN_TOOLS.filter(t =>
 );
 
 const REVISION_TOOLS = MAIN_TOOLS.filter(t =>
-  ([TOOL_NAMES.WRITE_MAGMA, TOOL_NAMES.READ_MAGMA, TOOL_NAMES.ADD_CLARIFYING_QUESTION, ...DECISION_LOG_TOOL_NAMES] as string[])
+  ([TOOL_NAMES.WRITE_MAGMA, TOOL_NAMES.READ_MAGMA, TOOL_NAMES.ADD_CLARIFYING_QUESTION] as string[])
     .includes(t.name)
 );
 
@@ -144,7 +144,7 @@ async function runContradictionCheck(
 // ─── Sub-pass 3: trajectory revision ─────────────────────────────────────────
 
 async function runSubPass3(opts: FinalPassOptions): Promise<void> {
-  opts.onProgress('trajectory revision');
+  opts.onProgress('structural check');
 
   const articles: Array<{ path: string; content: string }> = [];
   for (const [path] of opts.state.runArticles) {
