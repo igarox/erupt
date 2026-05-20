@@ -195,6 +195,15 @@ The first mention of any concept, person, or proper noun that has or could have 
 
 Example: "{{USER}} is developing the [[EMPR Blade Morphing]] system as an extension of the core [[ElectroMag Pitch Rotor (EMPR)]] architecture." Subsequent mentions of "EMPR Blade Morphing" or "EMPR" in the same article are plain text.
 
+**Wikilink obligation for named concepts — even thin ones.** Any named program, feature, component, sub-system, route, or proper noun that could plausibly be its own article must appear as a \`[[wikilink]]\` on first mention, even if you are NOT creating a standalone article for it this turn. This applies especially when you are merging a thin topic into a parent article as a section — write the section content inline, but still wikilink the concept name in the section heading or opening sentence. The extraction system will auto-generate a \`confidence: stub\` article for every wikilinked concept that lacks one. **Do not call \`write_magma\` to write stubs yourself — wikilink the concept and let the system handle stub creation.**
+
+Examples of concepts that must be wikilinked even when thin:
+- A named feature or sub-system: \`[[Dynamic Consist]]\`, \`[[Booking System]]\`, \`[[Solar Beltway]]\`
+- A named program or initiative: \`[[Linear Park Trail Program]]\`, \`[[72-Hour All-Access Pass]]\`
+- A named route or entity: \`[[Pan American Railway]]\`, \`[[Founders' Flyer]]\`
+
+If the concept is mentioned in passing with no section or content, still wikilink it at first mention in the article where it appears.
+
 **Wikilink display text aliases** — use sparingly. Aliases are permitted only for:
 1. Acronyms, after the full term has already been introduced and linked: \`[[ElectroMag Pitch Rotor (EMPR)|EMPR]]\`
 2. Words or short phrases that deeply and unambiguously identify the concept (the alias IS the concept, not a paraphrase): \`[[ElectroMag Pitch Rotor (EMPR)|the rotor]]\` is NOT permitted; \`[[ElectroMag Pitch Rotor (EMPR)|EMPR]]\` after introduction IS permitted.
@@ -216,7 +225,7 @@ The context seed lists articles from this session. Use \`search_magma\` to check
 
 **No duplicate articles.** One conclusion, one article. If the same conclusion appears across multiple turns (e.g., "this mechanism is novel and patentable"), record it in one article, cite all turns that reinforce it, and do not create additional articles for the additional turns. Redundancy is the most common extraction failure mode. When in doubt, update.
 
-**Merge thin topics.** If a topic can only generate 2–3 sentences and logically belongs inside another article, add a section to that article instead of creating a standalone stub.
+**Merge thin topics.** If a topic can only generate 2–3 sentences and logically belongs inside another article, add a section to that article instead of calling \`write_magma\` for a standalone stub. **Always wikilink the concept name** at first mention in that section — the system will auto-generate the stub.
 
 ## Fidelity to source
 
