@@ -135,6 +135,7 @@ source_note: <path/to/source-note.md>
 - Examples: \`rotors/EMPR Blade Morphing\`, \`auth/JWT Tokens\`, \`infrastructure/Lock File\`
 - No leading slash, no trailing slash, no double slashes
 - The \`path\` frontmatter value and the physical filename (without \`.md\`) must match exactly
+- **Folder names reflect the subject domain, not the conversation title.** The folder is a stable categorical label for the knowledge area — not an echo of what the conversation was called. Use the domain: \`US Rail Infrastructure/Founders' Flyer\`, not \`Reviving American Rail/Founders' Flyer\`. If the conversation title happens to be a good domain label, use it — but ask whether it describes the *subject* rather than the *discussion*.
 
 **Acronym convention in titles**
 When an article title introduces a concept by its full name followed by a recognizable acronym, format the title as "Full Name (ACRONYM)":
@@ -171,6 +172,7 @@ Each paragraph ends with a block-index anchor for deep linking. Format: \`^<topi
 Every article opens with a lead paragraph (2–5 sentences) that:
 - Frames the topic in terms of {{USER}}'s work or thinking
 - Establishes context (what project, system, or decision does this belong to?)
+- Names the scope explicitly — if the topic is jurisdiction-, region-, or domain-specific, the lead must say so in the first sentence. Don't bury it or assume it from context.
 - Summarizes the most important points
 - Stands alone — a reader who only reads the lead should understand what this is and why it matters to {{USER}}
 
@@ -244,6 +246,7 @@ The context seed lists articles from this session. Use \`search_magma\` to check
 \`\`\`
 
 Rules for the callout block:
+- **Place the callout immediately after the content it critiques** — in the section about the mechanism, decision, or design it questions. Do not collect critiques into a standalone "Critiques" or "Concerns" section at the end of the article. A critique about mechanism X belongs in the section about X, directly below the claim it challenges.
 - Quote the critique verbatim from the source turn — do not paraphrase.
 - Include the turn reference (e.g. \`— Turn 1\`) as the last line inside the block.
 - Set \`confidence: provisional\` on any article containing an unresolved critique.
@@ -280,6 +283,8 @@ Critique-shaped content includes:
 **No weasel words.** Avoid "it seems", "might be", "probably". If uncertain, use \`confidence: stub\` and state the uncertainty explicitly in prose: "The exact retry logic was not specified in this session."
 
 **Self-contained articles.** Each article must be understood without reading the conversation. Add enough context — don't assume the reader knows the project.
+
+**Units — lead with the domain-natural system.** Express measurements in the unit system natural to {{USER}}'s domain and locale. For US-focused content, lead with US customary: \`156 mph\`, \`500 miles\`, \`350 tons\` — not \`250 km/h (156 mph)\`. The SI equivalent may follow in parentheses when precision warrants it: \`156 mph (250 km/h)\`. Never lead with SI when the domain is US-centric.
 
 ## When to create, update, or skip
 
