@@ -6,6 +6,7 @@ import { handleTool, MAIN_TOOLS, TOOL_NAMES, type ToolContext } from './tools';
 import { EXTRACTION_SYSTEM_PROMPT } from './prompt';
 import { ensureDir } from '../fs';
 import { sleep, serializeDecisionLog } from './util';
+import { fillWikilinkStubs } from './wikilink-stub-writer';
 
 export interface LoopOptions {
   client: Anthropic;
@@ -43,8 +44,10 @@ export async function runExtractionLoop(opts: LoopOptions): Promise<void> {
 
     state.currentController = new AbortController();
 
+    let turnOk = false;
     try {
       await processTurn(turn, transcript[turn], ctx, opts);
+      turnOk = true;
     } catch (err) {
       if (isAbortError(err)) throw err; // propagate cancellation
       state.errorCount++;
@@ -57,6 +60,18 @@ export async function runExtractionLoop(opts: LoopOptions): Promise<void> {
       // continue to next turn — partial extraction > none
     } finally {
       state.currentController = null;
+    }
+
+    if (turnOk) {
+      try {
+        await fillWikilinkStubs(opts.vault, state, opts.magmaRoot, opts.sourceNotePath, turn);
+      } catch (err) {
+        await appendLog(opts.vault, opts.magmaRoot, {
+          event: 'wikilink_stub_error',
+          turn,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 
