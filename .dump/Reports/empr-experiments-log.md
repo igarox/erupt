@@ -482,3 +482,132 @@ The decision log architecture validates the cross-turn state hypothesis from the
 - Should `add_or_update_decision` require justification text to discourage over-broad Active decisions? (`all subsequent topics are subordinate` is a load-bearing claim that the agent didn't have to defend.)
 - Should `_decisions/` files include the source-note path + run timestamp in their frontmatter? Currently they're just-the-decisions; they'd be more useful as a session brief if they had session context.
 - The hardcoded required-fields error pattern (`citations must be a non-empty array`) costs a retry round-trip. Worth a prompt-level checklist to prevent first-write omission.
+
+---
+
+## Run 9 — 2026-05-15 — Multi-arc validation: rail transcript (decision log only, structural post-run pass)
+
+**Architecture:** Same as Run 8 — Decision Log Scratchpad + structural post-run pass. No new code between Run 8 and Run 9. The key change validated here: `TRAJECTORY_REVISION_SYSTEM_PROMPT` rewritten to structural-only (orphan repair, hatnote consistency, duplicate detection — no semantic corrections). Decision log tools removed from structural pass tool set. Progress label `'structural check'`.
+
+**Test hypothesis:** Can the decision log alone carry parallel arcs on a multi-topic transcript, or does a dominant Active decision collapse legitimate splits? The Run 8 concern: `empr-primary-invention: all subordinate` worked for EMPR (monomaniacal single-topic), but an equivalent over-broad Active on a multi-arc conversation could suppress article splits.
+
+**Transcript:** `Claude-Reimagining American rail with auto-train integration (truncated).md` — 21 prompt/response pairs, ~90KB (10.2% of 901KB original). Covers parallel arcs: auto-train loading protocol, passenger experience, portal network, international portals, HSR spines (Founders' Flyer + Gulf Stream), NYC service design, Ridgeliner dual-line, dynamic consist revenue features, transcontinental routes.
+
+**Articles produced:** 10
+- `Reimagining American Rail.md` — main hub, 143 lines, 7 sections, 4 `[!critique]` blocks
+- `Auto-Train Drive-Through Loading Protocol.md`
+- `Auto-Train Dynamic Consist Revenue Features.md`
+- `Auto-Train Passenger Experience (In-Vehicle Configuration).md`
+- `Continental Rail Portal Network.md` (portal architecture + parallel parks competition)
+- `Founders' Flyer (HSR Spine).md` (25-stop route, NYC segment philosophy, 3 design alternatives, quantified time analysis)
+- `Gulf Stream (HSR Spine).md`
+- `HSR Line Network.md`
+- `Ridgeliner (Dual Appalachian Express).md` (dual-line architecture, outer ridge visual experience)
+- `Transcontinental Non-Stop Routes (PanAm and Solar Beltway).md`
+
+**Cost:** $2.43
+
+**Decision files:** 9/10 articles. `Ridgeliner (Dual Appalachian Express).decisions.md` absent — agent called no `add_or_update_decision` tools during Ridgeliner turns. Article ends with block anchor `^ridgeliner-2`, no `[[_decisions/...]]` wikilink.
+
+### Arc collapse verdict: None
+
+**The dominant-Active hypothesis was not triggered.** No broad "all subordinate" Active decision was created. Each arc received article-specific decisions:
+
+| Decision | Article(s) | Scope |
+|---|---|---|
+| `hsr-line-network-tier-1` | Founders' Flyer, Gulf Stream | HSR spine child article promotion |
+| `international-portal-framework` | Continental Rail Portal Network | Cascading sovereign portals as Tier 1 strategic layer |
+| `motorcycle-transport-integration` | Loading Protocol | Motorcycle at $350–400/pallet |
+| `modular-cargo-pod-revenue` | Loading Protocol | Cargo pods in empty vehicle slots |
+| `two-deck-vehicle-stratification` | Loading Protocol | Two-deck height split (8 ft / 6.5 ft) |
+| `drive-through-loading-ux` | Loading Protocol | Conveyor entry + embedded operational intelligence |
+| `bomb-dog-security-integration` | Consist Revenue Features | 30-sec sweep, ~$4.80/vehicle |
+| `car-wash-dual-purpose` | Consist Revenue Features | Car wash + diagnostic |
+| `theater-car-dynamic-feature` | Consist Revenue Features | Reservation-only, family/adult programming |
+| `chartered-conference-train-flex` | Consist Revenue Features | Late-game luxury |
+| `transcontinental-pricing-and-testbed` | Transcontinental Routes | 72-hr pass + PanAm as R&D testbed |
+
+11 Active decisions across 10 articles — none are session-wide scope. The decision log functioned as a distributed, article-scoped tracking layer rather than a monolithic arc-state holder. This directly refutes the worst-case failure mode hypothesized after Run 8.
+
+### TODOS validation criteria
+
+| Criterion | Target | Result |
+|---|---|---|
+| Cost below Run 8 baseline | ≤$0.52 | ❌ $2.43 (transcript 4× longer: 21 pairs vs. ~9) |
+| Structural pass: zero semantic corrections | Zero | ✅ Articles clean; no correction evidence in output |
+| Parallel arcs: each gets own article, no collapse | 10 arcs → 10 articles | ✅ |
+
+The cost criterion was calibrated for an EMPR-length run before the transcript was extended to 10%. Per-pair cost: $0.116/pair vs. Run 8's $0.058/pair — 2× higher. Multi-arc complexity drivers: more existing articles in contextSeed per turn, larger decision log state, more `write_magma` calls. Absolute cost is not comparable across transcript sizes.
+
+**Run 9 conclusion: "If Run 9 is clean — decision log alone is sufficient; trajectory tool is unnecessary."** This branch is reached.
+
+### Failures and residual issues
+
+1. **Ridgeliner missing decisions file.** Agent wrote the Ridgeliner article across turns 35–38 without calling `add_or_update_decision`. If the agent correctly judged no commit-worthy decisions were made, this is acceptable — not every article needs Active decisions. But the missing `[[_decisions/...]]` wikilink reveals that `writeArticleDecisionLogs()` silently skips articles with zero decisions rather than writing an empty file. Decide: empty file with wikilink (consistent footer), or current behavior (no file, no wikilink).
+
+2. **Protected lands political judo arc not extracted as standalone article.** The trail feeder as environmental coalition strategy content (~turn 20–21) did not produce a dedicated article. Likely absorbed into the main hub's marketing section or portal network political context. A standalone `Protected Lands and Environmental Coalition Strategy.md` may have been appropriate. Probable cause: single-pair arc judged Tier 3 (color for the main hub) by the agent.
+
+3. **Cost 4.7× Run 8 baseline.** Per-pair cost is 2× Run 8 even accounting for length. Investigate whether contextSeed size is the dominant driver — each turn on a multi-arc run arrives with 10 prior articles already written, vs. 2 on EMPR.
+
+### What the architecture validates
+
+1. **The dominant-Active hypothesis is disproved on this transcript.** Decision log alone is sufficient for multi-arc trajectory management without an `update_trajectory()` tool. The TODOS "If Run 9 is clean" branch is reached.
+2. **Decision log scales to multi-arc.** 11 Active decisions across 10 articles, all correctly scoped.
+3. **Structural post-run pass has no semantic work.** The `'structural check'` label is accurate.
+4. **Article count scales correctly.** 10 articles for 21 pairs / 10 arcs. No gross over-fragmentation (Run 1: 21 articles for 9 pairs) and no over-consolidation (Run 2: 2 articles for 9 pairs).
+
+### Compared to prior runs
+
+| Run | Transcript | Articles | Cost | Score | Verdict |
+|---|---|---|---|---|---|
+| 1 | EMPR (~9t) | 21 | $0.64 | 0.5/7 | baseline |
+| 2 | EMPR | 2 | $0.50 | 2.5/7 | over-consolidation |
+| 3 | EMPR | 3 | $0.48 | 5.5/7 | best prior balance |
+| 4 | EMPR | 3 | $0.62 | 5.5/7 | callouts fixed |
+| 5 | EMPR | 9 | $0.43 | 5/7 | over-fragmented |
+| 6 | EMPR | 1 | $0.34 | 3.5/7 | everything collapsed |
+| 7 | EMPR | 2 | $0.55 | 4.5/7 | TS validators hold |
+| 7-fresh | Fresh (~9t) | — | $0.29 | 5/7 | fresh-transcript sanity |
+| 8 | EMPR | 2 | $0.52 | 5/7 | decision log; blade morphing correct |
+| **9** | **Rail (21 pairs, multi-arc)** | **10** | **$2.43** | **n/a** | **arc collapse: none; decision log alone sufficient; trajectory tool unnecessary** |
+
+### What this means for the v2 roadmap
+
+The trajectory-as-per-turn-signal question (TODOS P2) is answered: the decision log alone is sufficient. No `update_trajectory()` tool needed. The post-run structural pass has no semantic work to do. These findings close out the trajectory question.
+
+**Open architectural questions surfaced by Run 9:**
+- `writeArticleDecisionLogs()` silently skips articles with zero decisions, leaving them without the `[[_decisions/...]]` wikilink footer. Should it write an empty decisions file for consistent article structure?
+- Protected lands arc missed: article-splitting judgment is still imperfect for short (single-pair) arcs. Worth a prompt-level nudge: "a single turn introducing a new strategic topic warrants its own article."
+- Per-pair cost 2× Run 8: investigate whether contextSeed accumulation (more prior articles in each turn's context on multi-arc runs) is the dominant cost driver. If so, a sliding-window or summary approach for distant articles could reduce cost without losing accuracy.
+
+### User QA notes (post-run vault review)
+
+#### Major
+
+1. **Jurisdictional scope absent from lead.** `Reimagining American Rail.md` doesn't mention the US in its lead paragraph — it's in the title only. A Wikipedia-style article establishes geographic scope in the opening sentence.
+2. **Missing hub wikilink.** `HSR Line Network` is not wikilinked from the `Reimagining American Rail` summary section, breaking the main hub → child article navigation.
+3. **Charging infrastructure misplaced.** Charging details landed in the "Vision and Strategy" section of `Reimagining American Rail` rather than in the operational or infrastructure sections where they belong.
+4. **`[!critique]` callouts lumped, not inline.** Critique callouts are gathered into a single section instead of being placed inline where the critiqued claim appears. This is the wrong philosophy: inline callouts annotate the text; a gathered section is just a Criticisms section that should use regular prose. The Open Questions section may have the same structural issue — needs a rethink together.
+5. **Governance and decisions details omitted.** Based on transcript review, governance structure and decision-making details were not extracted into any article.
+6. **Dynamic Consist not surfaced in main hub.** `Auto-Train Dynamic Consist Revenue Features` is its own article but the capability isn't mentioned in the `Reimagining American Rail` summary — a significant omission for a flagship differentiator.
+7. **No stub articles generated.** The system never creates stubs for topics that are clearly their own article but lack enough material for a full one. Missing stubs include: `Linear Park Trail Program`, `Booking System`, `Dual-Use Cargo Design`, `Dynamic Consist` (standalone, distinct from the revenue features article), `72-Hour All-Access Pass`, `Solar Beltway`, `Pan American Railway`. Wikipedia creates stubs when an article is clearly needed — the same standard applies here.
+8. **"(In-Vehicle Configuration)" unnecessary parenthetical.** The article title `Auto-Train Passenger Experience (In-Vehicle Configuration)` should be `Auto-Train Passenger Experience`.
+9. **72-Hour All-Access Pass section misplaced.** This section sits inside the transcontinental routes article when it's a fare/ticketing product that belongs in a dedicated stub or the main hub's pricing section.
+10. **Seats-Only Stops section contains a direct question.** The question should be rephrased as prose or moved to Open Questions.
+
+#### Minor
+
+1. **Folder should be "US Rail Infrastructure"** — current name "Rail Infrastructure" is too generic for a vault that may eventually include non-US content.
+2. **Missing targeted bullet points and tables.** Line stop lists (e.g. Founders' Flyer route) would benefit from structured formatting. Wikipedia balances prose with tables/lists — the current output is uniformly prosaic even where structure aids comprehension and future AI retrieval.
+3. **Founders' Flyer apostrophe inconsistency.** Article title uses `'` (curly) in some places and omits it in others. Should be consistent: `Founders' Flyer`.
+4. **Inconsistent stop/route formatting across articles.** Founders' Flyer uses enumerated list broken by region headers; Ridgeliner uses arrowed prosaic lists. Cross-article formatting should be consistent for the same type of data.
+5. **{{USER}} reference density feels like a report.** Framing too centered on `{{USER}}` refs. Best iteration so far but still reads as a dossier rather than an article. Needs careful calibration — any change risks reverting attribution accuracy.
+6. **"Design Gaps" in Gulf Stream is actually Open Questions** — not labeled as such. Also contains a comparative statement ("less detailed than the Founders' Flyer") that will go stale as the wiki grows.
+7. **Format error in Tier-1 HSR Spines section.** "Main article" lines are rendering as headers rather than italicized hatnotes.
+
+#### General thoughts (architectural / future)
+
+1. **Post-vault refinement pass.** A second pass after extraction that improves article linking, adds external citations for unexplained terms of art, and polishes writing quality. Local Ollama is ideal for cost; scalability on consumer hardware is the constraint.
+2. **American-first units.** Default should always be the common American expression for the domain: `156 mph` (not `250 km/h (156 mph)`). Metric in parentheses if shown at all.
+3. **Open Questions with answer slots → decision log integration.** If Open Questions used callout syntax with an answer field, a background Erupt process could detect when a question is answered in a later session and promote it to the decision log as a resolved entry.
+4. **Multi-session ordering problem.** When multiple chats on similar topics run non-sequentially, decision log entries from run 1 can be contradicted by run 3 without reconciliation. Directing users to run in order is a workaround; a merge/conflict-detection layer is the real fix.

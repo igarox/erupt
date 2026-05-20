@@ -12,14 +12,15 @@ Items marked **[PRE-LAUNCH — ERUPT]** must be resolved before Obsidian Communi
 
 This fortnight is Erupt's last quality+model push before closed beta. The closed beta landing — handing copies to non-founder users — is the gate that triggers Magazine code work (see workspace `TODOS.md` "Magazine — Gate"). Order matters: business-model decision → quality runs → quality gate → vault generation → beta cohort.
 
-**Sprint workstreams (this fortnight):**
+**Sprint workstreams (this fortnight) — updated post-Run 9:**
 
-1. **EMPR quality runs (continuation of Run 8).** More runs with founder-recorded notes per run, reviewed and folded back into prompt/architecture. Focus: accuracy and consistency. Notes captured in `erupt/decision-log-scratchpad.md` (or equivalent) so prompt-change rationale survives the next run cycle.
-2. **Business model decision** — see "[SPRINT — DECISION] Free/Local/Cloud → BYOK reframe" below.
-3. **Cost reduction work.** Run 4 surfaced $0.62/run as a cost blocker. Tactical levers: prompt compression, model routing (Haiku 4.5 vs Sonnet boost), reducing turn count, caching repeated context across runs in a session.
-4. **Quality gate** — see "[SPRINT — GATE] Quality threshold before real vault generation" below.
-5. **Vault generation against Magazine-context chats** (post-gate). The first hard dogfood + the unlock for Magazine work.
-6. **Some UI polish on breaks** — Session Picker keyboard nav (P1), Status Bar aria-live (P1), other XS items in this file.
+1. **Prompt sprint: rail QA issue fixes.** Run 9 surfaced a new failure cluster distinct from EMPR: hub completeness (governance omitted, Dynamic Consist not in main article), content routing errors (misplaced sections), missing stubs for recognized-but-thin topics, American-unit defaults, {{USER}} framing density, critique callout placement. This workstream addresses prompt-level fixes. See `[P1 — ERUPT] Prompt Sprint: Rail QA Issue Fixes` below. Validated with at least one re-run on both EMPR and a rail-type transcript before quality gate attempt.
+2. **Stub generation mechanism** — see `[P1 — ERUPT] Stub Generation Mechanism` below. Must ship before vault generation begins; gates vault completeness.
+3. **Business model decision** — see "[SPRINT — DECISION] Free/Local/Cloud → BYOK reframe" below.
+4. **Cost reduction work.** Run 9: $2.43 for 21 pairs (2× per-pair over Run 8). If BYOK lands, cost falls on user's key and the absolute-cost gate loosens. Regardless, contextSeed accumulation (prior article body content growing monotonically per turn on multi-arc runs) is the primary driver to investigate — see `[P2 — ERUPT] contextSeed Sliding Window`. Decouple: investigate contextSeed separately from the business model decision.
+5. **Quality gate — updated criteria.** See "[SPRINT — GATE] Quality threshold before real vault generation" below. Gate now requires EMPR rubric ≥6.5/7 AND a new multi-arc checklist on a clean run.
+6. **Vault generation against Magazine-context chats** (post-gate). The first hard dogfood + the unlock for Magazine work.
+7. **Some UI polish on breaks** — Session Picker keyboard nav (P1), Status Bar aria-live (P1), other XS items in this file.
 
 **Out of scope this fortnight:** Slipstream API proxy + account auth. See "[SPRINT — DECISION] Proxy this fortnight vs v1.5" below — leaning v1.5 (ship Local-only v1, add Free + Cloud later).
 
@@ -58,17 +59,25 @@ This fortnight is Erupt's last quality+model push before closed beta. The closed
 
 **Why:** The vault is the substrate for Magazine code work (CC reads vault content as knowledge base, see workspace `TODOS.md` "Magazine — Gate"). If extraction is at 5.5/7 with $0.62/run cost when vault generation begins, the vault inherits noise faster than the founder can curate it, and Magazine work inherits that noise downstream. The vault is regenerable, but founder time spent triaging bad notes is not.
 
-**Gate condition (must both hold):**
-- **Quality:** EMPR runs reliably hit ≥6.5/7 across mixed transcript types — not one cherry-picked run.
-- **Cost:** Per-extraction cost is in a range that makes ongoing vault regeneration viable, not punitive. Threshold TBD by founder; tie to the business-model decision above (BYOK changes the calculus — cost falls on the user's own key, so threshold can be looser).
+**Gate condition (must all hold):**
+- **Quality (EMPR rubric):** EMPR runs reliably hit ≥6.5/7 — not one cherry-picked run.
+- **Quality (multi-arc checklist):** One clean rail-type or Magazine-type run passes all of:
+  - Hub article includes wikilinks to all major child articles discussed
+  - Governance/decisions content captured in hub if discussed in transcript
+  - Stub articles generated for recognized-but-thin topics (no silent drops)
+  - No major section-level content routing errors (content in correct article and section)
+  - American-first units throughout
+  - Critique callouts placed inline, not lumped into a single section
+- **Stub generation shipped** — see `[P1 — ERUPT] Stub Generation Mechanism`. Vault cannot be trusted as complete without stubs.
+- **Cost:** Per-extraction cost in a viable range. Threshold TBD; BYOK changes the calculus (cost falls on user's key, so threshold can be looser if BYOK lands).
 
 **If quality is met but cost isn't:** BYOK pivot is the cost answer; proceed with vault generation under BYOK.
 
-**If quality isn't met:** No vault writing yet. More EMPR iteration, do not start the Magma vault for Magazine chats. The downstream Magazine-gate stays closed until this gate clears.
+**If quality isn't met:** No vault writing yet. More prompt iteration; do not start the Magma vault for Magazine chats. The downstream Magazine-gate stays closed until this gate clears.
 
-**Decision point:** Mid-sprint checkpoint, evaluate honestly. The cost of forcing the gate is a polluted vault that has to be regenerated; the cost of holding it is one more sprint.
+**Decision point:** Mid-sprint checkpoint, evaluate honestly. The cost of forcing the gate is a polluted vault; the cost of holding it is one more sprint.
 
-**Depends on:** Continued EMPR runs.
+**Depends on:** Prompt sprint + stub generation shipped. Validation runs on both EMPR and rail-type transcript.
 
 ---
 
@@ -959,3 +968,153 @@ Both belong in the main loop, not in a post-run pass. The post-run pass existed 
 **Depends on:** Decision log core mechanic (Run 8 validation).
 
 **Effort:** S (human: 1h / CC: ~10min).
+
+---
+
+## [P1 — ERUPT] Stub Generation Mechanism
+
+**What:** The extraction pipeline must be able to create stub articles for topics that are clearly their own discrete concept but don't yet have enough transcript content for a full article. Currently the system has two states: full article or nothing.
+
+**Why:** Without stubs the vault has a false closed-world appearance — topics the agent recognized as real and distinct simply don't appear. Two downstream costs: (1) future sessions can't find the topic via `search_vault` to expand it, producing either duplicates or re-drops; (2) the vault misleads the user about coverage gaps. Run 9 identified at least 7 missing stubs: `Linear Park Trail Program`, `Booking System`, `Dual-Use Cargo Design`, `Dynamic Consist` (standalone), `72-Hour All-Access Pass`, `Solar Beltway`, `Pan American Railway`.
+
+**Design (settled):**
+
+**Trigger: wikilink obligation.** If the agent writes `[[X]]` in any article, X must exist as at least a stub before the turn ends. The stub obligation is a consequence of the wikilink decision, not a separate judgment. This ties recognition to the moment it's live (per-turn) rather than reconstructing it post-extraction. Prompt rule: "For every `[[wikilink]]` you write to a concept that does not yet have an article, create a stub for it in the same turn using `write_magma` with `confidence: stub`."
+
+**No pruning.** Stubs are always accurate even when redundant — a stub for a concept that's already fully covered by its parent article is still a correct description of that concept. The only cost of redundant stubs is future token overhead (reading more articles in contextSeed / refinement passes). That cost is acceptable. Keeping design simple: create aggressively, never auto-delete. User can manually merge or let future sessions promote stubs naturally as topics get more coverage.
+
+**How to apply:**
+1. Add the wikilink-obligation rule to `EXTRACTION_SYSTEM_PROMPT` in `src/extraction/prompt.ts`.
+2. Use existing `write_magma` with `confidence: stub` — no new tool. Body: 1–2 sentence lead establishing what the concept is + Open Questions section with ≥1 question.
+3. Relax the word-count validator for `confidence: stub`: 50-word floor instead of the 150-word provisional floor.
+
+**Depends on:** `src/extraction/prompt.ts`, `src/extraction/tools.ts` (word floor relaxation).
+
+**Effort:** XS–S (CC: ~20 min for prompt change + validator tweak).
+
+---
+
+## [P1 — ERUPT] Prompt Sprint: Rail QA Issue Fixes
+
+**What:** Focused prompt editing session to address the quality failures identified in the Run 9 QA review.
+
+**Issues to address (all prompt-level):**
+- **American-first units.** Explicit rule: use the common American domain expression (`156 mph`, not `250 km/h (156 mph)`).
+- **Hub completeness contract.** Required-sections rule for main hub articles: if governance or decision-making structure was discussed it must appear in the hub; if a major subsystem has its own child article it must be wikilinked and summarized in the hub; cross-system capabilities (e.g. Dynamic Consist) may not be silently dropped from the hub even if they have a standalone article.
+- **Lead paragraph jurisdictional scope.** Rule: the lead paragraph must establish geographic or institutional scope if the topic is jurisdiction-specific.
+- **Section placement rules.** Charging infrastructure → operational/infrastructure sections; product offerings (passes, pricing tiers) → pricing/ticketing sections or stubs; not "Vision and Strategy".
+- **Folder naming convention.** Topic folders should use jurisdiction-aware specificity: "US Rail Infrastructure" not "Rail Infrastructure".
+- **{{USER}} framing density.** Use `{{USER}}` when attributing a specific design choice; prefer article-register prose for system descriptions that are just describing how the system works.
+
+**Validation:** Re-run EMPR (must still hit ≥5.5/7) + one rail-type run. Both must pass before quality gate attempt.
+
+**Depends on:** `src/extraction/prompt.ts`. Critique callout placement design decision (`[P2 — ERUPT] Critique Callout Placement`) should be resolved before this sprint touches critique language.
+
+**Effort:** S (CC: ~30 min for prompt edits + 2 validation runs ~$3–4 total).
+
+---
+
+## [P2 — ERUPT] Critique Callout Placement — Design Decision
+
+**What:** Settle the canonical philosophy for `[!critique]` callout placement before the next prompt sprint touches critique-related language.
+
+**The problem:** Run 9 produced `[!critique]` blocks gathered into a single section rather than placed inline. A gathered section is structurally a "Criticisms" section and should use regular bold-headed prose. The `[!critique]` callout format only adds value inline — annotating the specific claim being critiqued, immediately after it appears.
+
+**Options:**
+1. **Inline only.** `[!critique]` blocks appear immediately after the claim they annotate, within the section where the claim lives. No dedicated critique section.
+2. **Compiled section with prose.** All critiques go in a "Limitations" or "Criticisms" section as regular bold-headed prose. Drop `[!critique]` callout syntax entirely for that section.
+3. **Both by type.** Technical/engineering critiques inline (annotate specific claims); strategic/viability critiques compiled in a Limitations section.
+
+**Why this gates the prompt sprint:** Any further `[!critique]` prompt tuning without settling placement will keep pulling in the wrong direction. The current prompt says "add critique callouts" without placement rules — that's why they lump.
+
+**Depends on:** Founder decision.
+
+**Effort:** XS (decision) + S (prompt update + validation run).
+
+---
+
+## [P2 — ERUPT] contextSeed Sliding Window for Multi-Arc Cost
+
+**What:** Investigate and implement a sliding window or summary strategy for prior article content in the extraction contextSeed to reduce per-turn cost on multi-arc runs.
+
+**Why:** Run 9 cost $2.43 for 21 pairs — 2× per-pair cost of Run 8 even accounting for transcript length. Leading hypothesis: on multi-arc runs, each turn arrives with all previously written articles in the contextSeed and this content grows monotonically. By turn 20 of a 10-arc run the agent has 10 partial or complete articles in context. A real Magazine-type run (30–60 turns, 15+ arcs) could cost $5–15.
+
+**How to apply:**
+1. **Instrument first.** Add per-turn contextSeed token logging to `loop.ts`. Run once to measure the growth curve.
+2. **If accumulation confirmed:** articles written >N turns ago get a compressed summary (title + lead paragraph only) in the contextSeed; recent-turn articles keep full text.
+3. **Validate:** Re-run EMPR and rail. Any new cross-article contradictions or missed wikilinks indicate the window is too aggressive.
+
+**Note:** Distinct from `[POST-V1] Trim vaultTitles`, which addresses vault-wide file listing bloat. This addresses prior-article body content accumulation.
+
+**Depends on:** Instrumentation run to confirm hypothesis.
+
+**Effort:** S (instrument: ~30 min; sliding window: ~1h; validation: 2 runs).
+
+---
+
+## [P2 — ERUPT] writeArticleDecisionLogs — Empty File for Zero-Decision Articles
+
+**What:** `writeArticleDecisionLogs()` currently skips articles with zero decisions — no file is written and no `[[_decisions/...]]` wikilink is appended to the article body. Run 9's Ridgeliner article demonstrates the result: article ends with a block anchor instead of the standard footer.
+
+**Recommendation:** Write an empty decisions file for every article. Every article gets `_decisions/<Article>.decisions.md` with the standard header and empty Active/Open/Retired sections. The `[[_decisions/...]]` wikilink should be a structural footer present on all articles — its absence signals "we forgot" not "no decisions".
+
+**Depends on:** `src/extraction/tools.ts` (`writeArticleDecisionLogs`).
+
+**Effort:** XS (CC: ~10 min).
+
+---
+
+## [P2 — ERUPT] Multi-Session Decision Log Conflict Detection
+
+**What:** When a new extraction session runs on a transcript that overlaps with a topic already in the vault, detect and surface conflicts between the new session's decision log entries and existing entries in `_decisions/<Article>.decisions.md`.
+
+**Why:** Decision log entries from session 1 can be contradicted by session 3 without reconciliation when sessions run non-sequentially. The vault would hold two canonical decisions that contradict each other with no signal to the user. Users can't always run sessions in chronological order.
+
+**How to apply:**
+- At extraction start, read existing `_decisions/*.decisions.md` for articles the current session will touch.
+- After extraction, compare new Active decisions against existing Active decisions on the same article. If a decision key conflicts or two Active decisions semantically contradict, surface a conflict modal with three resolution options: keep new, keep old, merge manually.
+
+**Note:** v2 architectural problem, not a prompt fix. Design the interface now; implement when closed beta confirms multi-session conflict frequency.
+
+**Depends on:** Closed beta data confirming actual conflict frequency. Do not implement before measuring.
+
+**Effort:** M (design: ~1h; implementation: ~3h).
+
+---
+
+## [P3 — ERUPT] Open Questions Answer Slots → Decision Log Integration
+
+**What:** Change Open Questions entries to a callout format with an answer slot. A background Erupt pass detects when a question is answered in a later session and promotes the entry to the decision log as a resolved item.
+
+**Example format:**
+```
+> [!question] Will {{USER}} accept the 1–3° pitch authority trade-off?
+> **Answer:** *(unresolved)*
+```
+
+When the answer field is filled (manually by the user or by a future extraction pass that detects resolution), Erupt converts the entry to a resolved decision log entry and removes the Open Question from the article.
+
+**Why:** Closes the feedback loop between Open Questions and the decision log. A question answered in session 3 currently has no mechanism to update the session-1 article that asked it, creating growing drift between article state and conversation state.
+
+**Depends on:** Decision log core mechanic (shipped). Requires design for how Erupt detects that a question has been answered in a later session.
+
+**Effort:** M (design first: ~1h; implementation: ~2h).
+
+---
+
+## [P3 — ERUPT] Post-Vault Refinement Pass
+
+**What:** A lightweight second pass after extraction that improves article linking (missing wikilinks between related articles), adds external citations for unexplained domain terms of art, and polishes prose quality ({{USER}} framing density, section flow).
+
+**Why:** Extraction optimizes for completeness and accuracy. Refinement optimizes for readability and navigation. Separating the goals lets each pass do its job without distraction.
+
+**Implementation options:**
+- **Cloud (Haiku 4.5 via proxy):** Low cost ($0.01–0.05/article), works on any plan.
+- **Local (Ollama):** Scalable on capable hardware; degrades on low-spec machines.
+- **Fold into existing structural pass:** Lower quality ceiling; no additional cost.
+
+**Note:** v1.5+ feature. Do not implement before the main extraction pass produces clean, complete articles. A refinement pass on structurally incomplete source articles adds noise, not quality.
+
+**Depends on:** v1 extraction quality validated and vault generation running. Business model decision (determines proxy vs. local path).
+
+**Effort:** S–M depending on implementation path.
