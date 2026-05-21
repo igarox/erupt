@@ -1,0 +1,20 @@
+Major:
+- The "main" article is called "System Overview" which has no context to it. The folder name may have allowed the AI to assume context that should not be assumed. Last run's main article title was better
+- The subtitles under the Linear Park Trail Program are general bad (they read something like pitch slide deck titles, not objective subjects). Unlike most articles, this whole article particularly reads like a persuasive piece instead of a wiki article
+- "Benevolent Competitive Dynamics" is a bad title because it's not specific enough. Adding the word "international" would fix it alone and adding "rail" or similar would be better
+- A lot of the article titles fail to tether to the reason they are spawned. You click on "American Traditionalist Politics" thinking you're going to a general article on that political philosophy but then find its all about rail and framed in terms of the rail project
+- Article voice seems to have suffered a lot in this run in general. Less objective. Less wikipedia sounding.
+- Some of the stubs are like records of why they are stubs instead of an actual wiki like stub.
+- Regional Revival Lines stub should have at least referenced the Reidgeliner. I'm not sure how that was missed there.
+- There's definitely info on the Heritage Station Restoration
+- The "main" article is noticeably less useful than last time as it lacks breadth of topic coverage. the problem may have been caused by the title itself (which makes articles brittle as a point of failure-- worth noting)
+
+Minor:
+- Stubs seem to lack Open Questions which would be a natural fit. If there are none there are none though.
+- Pan American Railway article doesn't introduce the nickname "PanAm" before using it
+
+NOTES:
+- I didn't have time to read EVERY article so I did some targeted reading and skimming for what i could notice
+- The stubs seem to be all warranted and the wiki feels full and ready for fleshing out as more extractions or as notes are added to the vault
+- Maybe for items that truly have no info but the entity name then they should be left as ghost leaves (links with no article). Willshow up on graph but not traversable. Not sure if any would qualify for that in this run but may work for other circumstances.
+- nothing comes out of provisional status right now. may not be an issue but im not sure because i dont remember how the confidence system works.

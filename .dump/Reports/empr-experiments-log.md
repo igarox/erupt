@@ -570,6 +570,7 @@ The cost criterion was calibrated for an EMPR-length run before the transcript w
 | 7-fresh | Fresh (~9t) | — | $0.29 | 5/7 | fresh-transcript sanity |
 | 8 | EMPR | 2 | $0.52 | 5/7 | decision log; blade morphing correct |
 | **9** | **Rail (21 pairs, multi-arc)** | **10** | **$2.43** | **n/a** | **arc collapse: none; decision log alone sufficient; trajectory tool unnecessary** |
+| **10** | **Rail (truncated, same transcript)** | **22** | **~$2.50+ (credits exhausted turns 40–41)** | **n/a** | **stub gen confirmed; wikilink obligation works; final passes did not run; voice regression; title scoping failures** |
 
 ### What this means for the v2 roadmap
 
@@ -611,3 +612,108 @@ The trajectory-as-per-turn-signal question (TODOS P2) is answered: the decision 
 2. **American-first units.** Default should always be the common American expression for the domain: `156 mph` (not `250 km/h (156 mph)`). Metric in parentheses if shown at all.
 3. **Open Questions with answer slots → decision log integration.** If Open Questions used callout syntax with an answer field, a background Erupt process could detect when a question is answered in a later session and promote it to the decision log as a resolved entry.
 4. **Multi-session ordering problem.** When multiple chats on similar topics run non-sequentially, decision log entries from run 1 can be contradicted by run 3 without reconciliation. Directing users to run in order is a workaround; a merge/conflict-detection layer is the real fix.
+
+---
+
+## Run 10
+
+**Date:** 2026-05-20
+
+**Architecture changes since Run 9:**
+- `wikilink-stub-writer.ts` — new module; scans `currentTurnWritten` after each successful turn and creates `confidence: stub` articles for any `[[wikilink]]` targets with no corresponding article
+- `loop.ts` — calls `fillWikilinkStubs` between turns (non-fatal, logged on error)
+- `prompt.ts` — wikilink obligation clause: named programs, features, components, and proper nouns must be wikilinked even when merging thin topics into a parent article; stub generator handles file creation, agent does not call `write_magma` for stubs
+- `prompt.ts` — "merge thin topics" rule updated: still merge content, but always wikilink the concept name
+- `prompt.ts` — four rail QA quick-wins from Run 9: folder naming uses subject domain (not conversation title), lead paragraph must name jurisdiction/scope explicitly, critique callouts placed inline after the content they critique (not lumped), US-first units
+- `prompt.ts` / `final-pass.ts` — trajectory pass narrowed to structural-only (orphan repair, hatnote consistency, duplicate detection); decision log tools removed from structural pass
+
+**Transcript:** Same as Run 9 — `Claude-Reimagining American rail with auto-train integration (truncated).md`, 21 pairs, ~90KB
+
+**Articles produced:** 22 (vs. 10 in Run 9)
+- `System Overview.md` — main hub
+- `Auto-Train Integration (Passenger-in-Vehicle Seating).md`
+- `Auto-Train Pricing and Revenue Optimization.md`
+- `Auto-Train Service Enhancements and Consist Options.md`
+- `Benevolent Competitive Dynamics.md`
+- `American Traditionalist Politics.md`
+- `Civic Confidence and Institutional Recovery.md`
+- `Founders Flyer.md`
+- `Founders Flyer NYC Service Design.md`
+- `Gulf Stream.md`
+- `High-Speed Rail (HSR).md`
+- `International Portal Architecture.md`
+- `Linear Park Trail Program.md` ← previously missing stub; now a full provisional article
+- `Pan American Railway.md` ← previously missing
+- `72-Hour All-Access Transcontinental Pass.md` ← previously missing
+- `Solar Beltway.md` ← previously missing
+- `Ridgeliner (Regional Revival).md`
+- `Regional Revival Lines.md` — programmatic stub ✅
+- `Light-Speed Rail (LSR).md` — programmatic stub ✅
+- `Long Island Express.md` — programmatic stub ✅
+- `Heritage Station Restoration.md` — programmatic stub ✅
+- `collector feeder model.md` — programmatic stub ✅
+
+**Confidence breakdown:** 14 provisional, 2 settled, 6 stub
+
+**Cost:** ~$2.50+ (credits exhausted mid-run)
+
+**Completion:** Partial. Credits ran out at turns 40–41 — the last two turns of the main loop. Compliance, contradiction, and trajectory passes did not run.
+
+**Validator summary:** 49 write attempts, 13 rejections (26.5% rejection rate). By validator: citations ×10, path ×2, path_title_parens ×1. Citations validator was hit repeatedly on `System Overview` and `Ridgeliner` — model retried and eventually succeeded, but at tool call cost.
+
+### Stub generation: confirmed
+
+Both mechanisms validated:
+
+1. **Programmatic stub generator fired.** 5 articles carry the "has not yet been fully extracted" signature: Regional Revival Lines, Light-Speed Rail (LSR), Long Island Express, Heritage Station Restoration, collector feeder model. These were created between turns without any `write_magma` call from the LLM.
+
+2. **Wikilink obligation prompt worked.** The LLM wrote full provisional articles for Linear Park Trail Program, Pan American Railway, 72-Hour All-Access Transcontinental Pass — all previously missing in Run 9. The prompt change caused the LLM to write the articles directly rather than skipping thin topics entirely.
+
+Article count doubled (10 → 22) on the same transcript, same credit range.
+
+### Failures and new issues
+
+1. **Meta-stub content problem.** Programmatic stubs read as system metadata: "X is referenced in [[Y]] but has not yet been fully extracted from the source conversation." This is accurate but wrong-voiced for a wiki. `buildStubContent` in `wikilink-stub-writer.ts` needs a better one-liner template. Related: user proposed "ghost leaves" — wikilinks with no file at all for truly empty concepts, showing as open nodes in the graph rather than meta-stub files.
+
+2. **Heritage Station Restoration had real content but was stubbed.** The stub generator created the file mid-run; subsequent turns saw it in the context seed and assumed the topic was covered. The LLM never expanded it even though transcript content existed. Stubs need to signal "placeholder only" more clearly to prevent premature coverage assumption.
+
+3. **Title scoping failure — systematic.** "American Traditionalist Politics", "Benevolent Competitive Dynamics", "System Overview", "Civic Confidence and Institutional Recovery" are all decontextualized — a reader can't tell these are about the rail project from the title alone. Prompt needs a scoping rule: if the concept is only meaningful in {{USER}}'s project context, the title must carry a qualifier.
+
+4. **Hub article brittleness.** "System Overview" has no context without the folder name. Its value depends entirely on the folder carrying the domain label. This is an architectural fragility — a generic hub title becomes useless if folder naming fails. The hub article should always carry the domain name in its title.
+
+5. **Folder name still wrong.** "Rail Reimagining" — prompt change did not fully land. The model still named it after the conversation rather than the subject domain. The example in the prompt (`US Rail Infrastructure`) needs to be stronger or the folder inference needs to be explicit.
+
+6. **Voice regression.** Articles are less objective and less encyclopedia-voiced than Run 9. Linear Park Trail Program reads like a pitch deck — persuasive headers, advocacy tone. The wikilink obligation additions may have increased LLM output speed at the cost of prose quality. The compliance pass would have caught some of this but did not run due to credit exhaustion.
+
+7. **Benevolent Competitive Dynamics — title too vague.** Not tethered to the domain. Should be something like "International Rail Competitive Dynamics."
+
+8. **`Founders' Flyer` apostrophe path validation failure.** Path validator rejected the apostrophe twice; article was written as `Founders Flyer` without it. The apostrophe is meaningful (possessive). Either the path validator needs to permit apostrophes, or the prompt needs to warn the LLM to omit them from paths.
+
+9. **Regional Revival Lines stub omits Ridgeliner reference.** The stub has no "See also: [[Ridgeliner]]" even though Ridgeliner is the primary Regional Revival Line article. A stub for a parent category should point to its primary child.
+
+10. **Nothing reaches `settled` confidence.** Expected for a planning/ideation conversation — `settled` requires an explicit commitment turn. Not a bug, but the confidence system's behavior should be visible to users.
+
+### User QA notes (post-run vault review)
+
+#### Major
+
+1. **"System Overview" main article has no context.** The folder name carries the domain label that the hub article should carry itself. This makes the hub brittle — its utility depends on the folder name being correct.
+2. **Linear Park Trail Program reads as a pitch deck.** Section headers are persuasive slide titles, not objective subject labels. The whole article reads as advocacy rather than a wiki entry — voice failure specific to this article.
+3. **"Benevolent Competitive Dynamics" title too vague.** Adding "international" and "rail" would ground it (e.g. "International Rail: Benevolent Competitive Dynamics").
+4. **Article titles not tethered to domain.** "American Traditionalist Politics" reads as a general political philosophy article; clicking it expecting rail context is disorienting. Titles must signal their specificity.
+5. **Article voice suffered across the run.** Less objective, less Wikipedia-sounding than Run 9 overall.
+6. **Programmatic stubs read as records of their own existence** rather than wiki stubs. Better to write a minimal definitional sentence, or implement ghost leaves for truly empty concepts.
+7. **Regional Revival Lines stub doesn't reference Ridgeliner** — an obvious omission for a parent-category stub.
+8. **Heritage Station Restoration had transcript content** — should not be a stub.
+9. **Main hub less useful than Run 9's.** Lacks breadth of topic coverage. The title ("System Overview") is likely the cause — a generic title produces a generic scope.
+
+#### Minor
+
+1. **Stubs lack Open Questions** — would be a natural fit where information gaps are known.
+2. **Pan American Railway doesn't introduce "PanAm" nickname** before using it.
+
+#### General thoughts
+
+1. **Ghost leaves.** For entities with only a name reference and no extractable content, leave the wikilink unresolved (no file) rather than writing a meta-stub. Shows as open node in Obsidian graph — signals "needs work" without polluting the vault.
+2. **Stub promotion signal needed.** LLM should be explicitly told that programmatic stubs are placeholders and must be expanded when transcript content is available — not treated as covered articles.
+3. **Nothing settles in planning conversations.** Expected behavior — `settled` requires a commitment turn. Users may need guidance that `provisional` is the normal output for ideation sessions.
